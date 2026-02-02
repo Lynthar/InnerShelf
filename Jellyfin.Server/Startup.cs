@@ -6,11 +6,12 @@ using System.Net.Http.Headers;
 using System.Net.Mime;
 using System.Text;
 using Emby.Server.Implementations.EntryPoints;
+using Emby.Server.Implementations.Stubs;
 using Jellyfin.Api.Middleware;
 using Jellyfin.Database.Implementations;
-using Jellyfin.LiveTv.Extensions;
-using Jellyfin.LiveTv.Recordings;
 using Jellyfin.MediaEncoding.Hls.Extensions;
+using MediaBrowser.Controller.Channels;
+using MediaBrowser.Controller.LiveTv;
 using Jellyfin.Networking;
 using Jellyfin.Networking.HappyEyeballs;
 using Jellyfin.Server.Extensions;
@@ -125,14 +126,16 @@ namespace Jellyfin.Server
                 .AddCheck<DbContextFactoryHealthCheck<JellyfinDbContext>>(nameof(JellyfinDbContext));
 
             services.AddHlsPlaylistGenerator();
-            services.AddLiveTvServices();
 
-            services.AddHostedService<RecordingsHost>();
+            // InnerShelf: LiveTV disabled - register null implementations
+            services.AddSingleton<ILiveTvManager, NullLiveTvManager>();
+            services.AddSingleton<IChannelManager, NullChannelManager>();
+            services.AddSingleton<IRecordingsManager, NullRecordingsManager>();
+
             services.AddHostedService<AutoDiscoveryHost>();
             services.AddHostedService<NfoUserDataSaver>();
             services.AddHostedService<LibraryChangedNotifier>();
             services.AddHostedService<UserDataChangeNotifier>();
-            services.AddHostedService<RecordingNotifier>();
         }
 
         /// <summary>

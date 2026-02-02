@@ -14,7 +14,6 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Emby.Naming.Common;
-using Emby.Photos;
 using Emby.Server.Implementations.Chapters;
 using Emby.Server.Implementations.Collections;
 using Emby.Server.Implementations.Configuration;
@@ -837,9 +836,6 @@ namespace Emby.Server.Implementations
 
             // Include composable parts in the Providers assembly
             yield return typeof(ProviderManager).Assembly;
-
-            // Include composable parts in the Photos assembly
-            yield return typeof(PhotoProvider).Assembly;
 
             // Emby.Server implementations
             yield return typeof(InstallationManager).Assembly;
