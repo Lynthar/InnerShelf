@@ -1,6 +1,6 @@
 # InnerShelf
 
-一个用于管理成人影片库的 Jellyfin 插件（主要针对 JAV/日本成人影片）。直接安装在原版 Jellyfin Server 上，无需 fork。
+一个用于管理成人影片库的 Jellyfin 插件。直接安装在原版 Jellyfin Server 上。
 
 [English](README.md)
 
