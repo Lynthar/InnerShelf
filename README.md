@@ -1,6 +1,6 @@
 # InnerShelf
 
-A Jellyfin plugin for managing adult video libraries (primarily JAV/Japanese Adult Video). Install it on a vanilla Jellyfin Server — no fork required.
+A Jellyfin plugin for managing adult video libraries. Install it on a vanilla Jellyfin Server.
 
 [中文文档](README.zh-CN.md)
 
