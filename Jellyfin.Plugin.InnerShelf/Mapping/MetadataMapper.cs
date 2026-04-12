@@ -1,3 +1,4 @@
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.InnerShelf.Sources.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;

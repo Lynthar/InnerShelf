@@ -1,3 +1,4 @@
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.InnerShelf.Mapping;
 using Jellyfin.Plugin.InnerShelf.Sources.Models;
 using MediaBrowser.Model.Entities;

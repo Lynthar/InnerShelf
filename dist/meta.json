@@ -1,0 +1,17 @@
+{
+    "category": "Metadata",
+    "changelog": "Initial release",
+    "description": "JAV metadata provider with built-in scrapers and optional MetaTube backend integration",
+    "guid": "d4a1b2c3-e5f6-4a90-abcd-ef1234567890",
+    "name": "InnerShelf",
+    "overview": "Automatic metadata scraping for adult video libraries",
+    "owner": "Lynthar",
+    "targetAbi": "10.11.0.0",
+    "timestamp": "2026-04-12T00:00:00Z",
+    "version": "0.1.0.0",
+    "status": "Active",
+    "autoUpdate": true,
+    "assemblies": [
+        "Jellyfin.Plugin.InnerShelf.dll"
+    ]
+}

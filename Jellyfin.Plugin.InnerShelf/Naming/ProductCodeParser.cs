@@ -84,6 +84,7 @@ public static partial class ProductCodeParser
         return category switch
         {
             CodeCategory.FC2 => NormalizeFc2(upper),
+            CodeCategory.Heyzo => upper.Replace("_", "-"),
             CodeCategory.Heydouga => upper.Replace("_", "-"),
             CodeCategory.Uncensored => upper.Replace("_", "-"),
             _ => NormalizeDash(upper),
@@ -133,7 +134,7 @@ public static partial class ProductCodeParser
     [GeneratedRegex(@"\d{3}[A-Z]{2,5}[-_]\d{3,5}", RegexOptions.IgnoreCase)]
     private static partial Regex AmateurRegex();
 
-    [GeneratedRegex(@"[A-Z]{2,10}[-_]?\d{3,5}", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"[A-Z]{2,10}-?\d{3,5}", RegexOptions.IgnoreCase)]
     private static partial Regex CensoredRegex();
 
     [GeneratedRegex(@"\d{6}[-_]\d{2,3}", RegexOptions.None)]
