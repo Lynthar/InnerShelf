@@ -1,4 +1,3 @@
-using System.Net;
 using AngleSharp;
 using AngleSharp.Dom;
 using Jellyfin.Plugin.InnerShelf.Sources.Models;
@@ -56,7 +55,6 @@ public class JavBusSource : IMetadataSource
             var img = item.QuerySelector(".photo-frame img");
             var title = img?.GetAttribute("title");
             var thumbSrc = img?.GetAttribute("src");
-            var dateEl = item.QuerySelector("date");
 
             if (href is null)
             {
