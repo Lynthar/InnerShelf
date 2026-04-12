@@ -1,0 +1,130 @@
+using Jellyfin.Plugin.InnerShelf.Sources.Models;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.InnerShelf.Sources;
+
+/// <summary>
+/// Orchestrates queries across metadata sources by priority.
+/// Returns the first successful result (no merging).
+/// </summary>
+public class MetadataSourceManager
+{
+    private readonly ILogger<MetadataSourceManager> _logger;
+    private readonly IEnumerable<IMetadataSource> _sources;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MetadataSourceManager"/> class.
+    /// </summary>
+    public MetadataSourceManager(ILogger<MetadataSourceManager> logger, IEnumerable<IMetadataSource> sources)
+    {
+        _logger = logger;
+        _sources = sources;
+    }
+
+    /// <summary>
+    /// Searches all enabled sources by priority and returns the first non-empty result.
+    /// </summary>
+    public async Task<IReadOnlyList<SourceSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)
+    {
+        foreach (var source in GetEnabledSources())
+        {
+            try
+            {
+                var results = await source.SearchAsync(query, cancellationToken).ConfigureAwait(false);
+                if (results.Count > 0)
+                {
+                    _logger.LogDebug("Search for '{Query}' returned {Count} results from {Source}", query, results.Count, source.Name);
+                    return results;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Search failed on source {Source} for query '{Query}'", source.Name, query);
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Retrieves movie metadata from a specific source.
+    /// </summary>
+    public async Task<MovieMetadata?> GetMovieAsync(string sourceName, string sourceId, CancellationToken cancellationToken)
+    {
+        var source = _sources.FirstOrDefault(s => s.Name == sourceName && s.IsEnabled);
+        if (source is null)
+        {
+            _logger.LogWarning("Source '{Source}' not found or disabled", sourceName);
+            return null;
+        }
+
+        try
+        {
+            return await source.GetMovieAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "GetMovie failed on source {Source} for ID '{Id}'", sourceName, sourceId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Retrieves movie metadata by searching all sources for the given code.
+    /// Returns the first successful result.
+    /// </summary>
+    public async Task<MovieMetadata?> GetMovieByCodeAsync(string code, CancellationToken cancellationToken)
+    {
+        foreach (var source in GetEnabledSources())
+        {
+            try
+            {
+                var results = await source.SearchAsync(code, cancellationToken).ConfigureAwait(false);
+                if (results.Count > 0)
+                {
+                    var movie = await source.GetMovieAsync(results[0].SourceId, cancellationToken).ConfigureAwait(false);
+                    if (movie is not null)
+                    {
+                        _logger.LogDebug("Found metadata for '{Code}' from {Source}", code, source.Name);
+                        return movie;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "GetMovieByCode failed on source {Source} for '{Code}'", source.Name, code);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Retrieves actor metadata from all sources, returning the first match.
+    /// </summary>
+    public async Task<ActorMetadata?> GetActorAsync(string name, CancellationToken cancellationToken)
+    {
+        foreach (var source in GetEnabledSources())
+        {
+            try
+            {
+                var actor = await source.GetActorAsync(name, cancellationToken).ConfigureAwait(false);
+                if (actor is not null)
+                {
+                    return actor;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "GetActor failed on source {Source} for '{Name}'", source.Name, name);
+            }
+        }
+
+        return null;
+    }
+
+    private IOrderedEnumerable<IMetadataSource> GetEnabledSources()
+    {
+        return _sources.Where(s => s.IsEnabled).OrderBy(s => s.Priority);
+    }
+}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>InnerShelf</title>
+</head>
+<body>
+    <div id="InnerShelfConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+         data-require="emby-input,emby-button,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="InnerShelfConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">InnerShelf Settings</h2>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Metadata Sources</h3>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="EnableJavBus" type="checkbox" is="emby-checkbox" />
+                                <span>Enable JavBus</span>
+                            </label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="EnableFanza" type="checkbox" is="emby-checkbox" />
+                                <span>Enable FANZA / DMM</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">MetaTube Integration (Optional)</h3>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="MetaTubeServerUrl">
+                                Server URL (leave empty to disable)
+                            </label>
+                            <input id="MetaTubeServerUrl" type="text" is="emby-input"
+                                   placeholder="http://localhost:8900" />
+                        </div>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="MetaTubeToken">
+                                API Token
+                            </label>
+                            <input id="MetaTubeToken" type="password" is="emby-input" />
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Display</h3>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="TitleTemplate">
+                                Title Template
+                            </label>
+                            <input id="TitleTemplate" type="text" is="emby-input"
+                                   placeholder="{code} {title}" />
+                            <div class="fieldDescription">
+                                Placeholders: {code}, {title}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Network</h3>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="HttpProxy">
+                                HTTP Proxy
+                            </label>
+                            <input id="HttpProxy" type="text" is="emby-input"
+                                   placeholder="http://127.0.0.1:7890" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        var InnerShelfConfig = {
+            pluginUniqueId: 'd4a1b2c3-e5f6-4a90-abcd-ef1234567890'
+        };
+
+        document.querySelector('#InnerShelfConfigPage')
+            .addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(InnerShelfConfig.pluginUniqueId).then(function (config) {
+                    document.querySelector('#EnableJavBus').checked = config.EnableJavBus;
+                    document.querySelector('#EnableFanza').checked = config.EnableFanza;
+                    document.querySelector('#MetaTubeServerUrl').value = config.MetaTubeServerUrl || '';
+                    document.querySelector('#MetaTubeToken').value = config.MetaTubeToken || '';
+                    document.querySelector('#TitleTemplate').value = config.TitleTemplate || '{code} {title}';
+                    document.querySelector('#HttpProxy').value = config.HttpProxy || '';
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+        document.querySelector('#InnerShelfConfigForm')
+            .addEventListener('submit', function (e) {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(InnerShelfConfig.pluginUniqueId).then(function (config) {
+                    config.EnableJavBus = document.querySelector('#EnableJavBus').checked;
+                    config.EnableFanza = document.querySelector('#EnableFanza').checked;
+                    config.MetaTubeServerUrl = document.querySelector('#MetaTubeServerUrl').value.trim();
+                    config.MetaTubeToken = document.querySelector('#MetaTubeToken').value;
+                    config.TitleTemplate = document.querySelector('#TitleTemplate').value.trim();
+                    config.HttpProxy = document.querySelector('#HttpProxy').value.trim();
+                    ApiClient.updatePluginConfiguration(InnerShelfConfig.pluginUniqueId, config).then(function () {
+                        Dashboard.processPluginConfigurationUpdateResult();
+                    });
+                });
+                e.preventDefault();
+                return false;
+            });
+    </script>
+</body>
+</html>
