@@ -23,8 +23,8 @@
     them locally to execute.
   -->
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.7" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.8" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.8" />
   </ItemGroup>
 
   <ItemGroup>

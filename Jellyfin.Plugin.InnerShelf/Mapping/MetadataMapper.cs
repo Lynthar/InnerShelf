@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.InnerShelf.Naming;
 using Jellyfin.Plugin.InnerShelf.Sources.Models;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -21,7 +22,10 @@ public static class MetadataMapper
     /// <summary>
     /// Maps a <see cref="MovieMetadata"/> to a Jellyfin <see cref="MetadataResult{Movie}"/>.
     /// </summary>
-    public static MetadataResult<Movie> ToMovieResult(MovieMetadata source)
+    /// <param name="source">Source metadata from the scraper.</param>
+    /// <param name="parsedCode">Optional product code parsed from the filename.
+    /// When provided, its version flags are appended to the movie's Tags.</param>
+    public static MetadataResult<Movie> ToMovieResult(MovieMetadata source, ProductCode? parsedCode = null)
     {
         var config = Plugin.Instance?.Configuration;
         var titleTemplate = config?.TitleTemplate ?? "{code} {title}";
@@ -52,7 +56,7 @@ public static class MetadataMapper
             movie.RunTimeTicks = TimeSpan.FromMinutes(source.RuntimeMinutes.Value).Ticks;
         }
 
-        // Map tags (Label, Series)
+        // Map tags (Label, Series, Version markers)
         var tags = new List<string>();
         if (!string.IsNullOrEmpty(source.Label))
         {
@@ -62,6 +66,40 @@ public static class MetadataMapper
         if (!string.IsNullOrEmpty(source.Series))
         {
             tags.Add($"Series: {source.Series}");
+        }
+
+        if (parsedCode is not null)
+        {
+            var versions = parsedCode.Versions;
+            if (versions.HasFlag(VersionFlags.ChineseSub))
+            {
+                tags.Add("Version: Chinese Sub");
+            }
+
+            if (versions.HasFlag(VersionFlags.Uncensored))
+            {
+                tags.Add("Version: Uncensored Leak");
+            }
+
+            if (versions.HasFlag(VersionFlags.Hack))
+            {
+                tags.Add("Version: Hack");
+            }
+
+            if (versions.HasFlag(VersionFlags.HdRemaster))
+            {
+                tags.Add("Version: HD Remaster");
+            }
+
+            if (versions.HasFlag(VersionFlags.FourK))
+            {
+                tags.Add("Version: 4K");
+            }
+
+            if (versions.HasFlag(VersionFlags.Revision))
+            {
+                tags.Add("Version: Revision");
+            }
         }
 
         movie.Tags = tags.ToArray();

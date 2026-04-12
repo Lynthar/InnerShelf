@@ -36,34 +36,38 @@ public class MovieMetadataProvider : IRemoteMetadataProvider<Movie, MovieInfo>, 
     /// <inheritdoc />
     public async Task<MetadataResult<Movie>> GetMetadata(MovieInfo info, CancellationToken cancellationToken)
     {
-        // Try existing provider ID first
+        // Always parse the filename for version markers (chinese sub, uncensored, HD remaster, etc),
+        // even if a provider ID already exists. Version flags are filename-derived metadata and need
+        // re-parsing on every scan so that tags stay accurate if the file is renamed.
+        var parsedCode = ProductCodeParser.Parse(info.Name) ?? ProductCodeParser.Parse(info.Path);
+
+        // Determine which code to look up on the metadata source: prefer an existing provider ID
+        // (user may have manually corrected it via the UI), fall back to what we parsed.
+        string? lookupCode;
         if (info.ProviderIds.TryGetValue(MetadataMapper.ProviderKey, out var existingCode) && !string.IsNullOrEmpty(existingCode))
         {
-            _logger.LogDebug("Looking up metadata by existing code: {Code}", existingCode);
-            var movie = await _sourceManager.GetMovieByCodeAsync(existingCode, cancellationToken).ConfigureAwait(false);
-            if (movie is not null)
-            {
-                return MetadataMapper.ToMovieResult(movie);
-            }
+            lookupCode = existingCode;
+            _logger.LogDebug("Using existing provider ID for lookup: {Code}", lookupCode);
         }
-
-        // Parse product code from the item name/path
-        var code = ProductCodeParser.Parse(info.Name) ?? ProductCodeParser.Parse(info.Path);
-        if (code is null)
+        else if (parsedCode is not null)
+        {
+            lookupCode = parsedCode.Normalized;
+            _logger.LogDebug("Parsed product code: {Code} (category: {Category}, versions: {Versions})", parsedCode.Normalized, parsedCode.Category, parsedCode.Versions);
+        }
+        else
         {
             _logger.LogDebug("No product code found in name '{Name}' or path '{Path}'", info.Name, info.Path);
             return new MetadataResult<Movie>();
         }
 
-        _logger.LogDebug("Parsed product code: {Code} (category: {Category})", code.Normalized, code.Category);
-
-        var metadata = await _sourceManager.GetMovieByCodeAsync(code.Normalized, cancellationToken).ConfigureAwait(false);
+        var metadata = await _sourceManager.GetMovieByCodeAsync(lookupCode, cancellationToken).ConfigureAwait(false);
         if (metadata is null)
         {
+            _logger.LogDebug("No metadata found for {Code} from any source", lookupCode);
             return new MetadataResult<Movie>();
         }
 
-        return MetadataMapper.ToMovieResult(metadata);
+        return MetadataMapper.ToMovieResult(metadata, parsedCode);
     }
 
     /// <inheritdoc />

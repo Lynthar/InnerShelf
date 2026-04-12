@@ -9,26 +9,14 @@ namespace Jellyfin.Plugin.InnerShelf.Sources.MetaTube;
 /// </summary>
 public class MetaTubeApiClient
 {
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetaTubeApiClient"/> class.
     /// </summary>
-    public MetaTubeApiClient(HttpClient httpClient)
+    public MetaTubeApiClient(IHttpClientFactory httpClientFactory)
     {
-        _httpClient = httpClient;
-    }
-
-    /// <summary>
-    /// Configures the client with the given server URL and token.
-    /// </summary>
-    public void Configure(string serverUrl, string token)
-    {
-        _httpClient.BaseAddress = new Uri(serverUrl.TrimEnd('/') + "/");
-        if (!string.IsNullOrEmpty(token))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
@@ -36,8 +24,8 @@ public class MetaTubeApiClient
     /// </summary>
     public async Task<MetaTubeSearchResponse?> SearchMovieAsync(string query, CancellationToken cancellationToken)
     {
-        var url = $"v1/movies/search?q={Uri.EscapeDataString(query)}";
-        return await _httpClient.GetFromJsonAsync<MetaTubeSearchResponse>(url, cancellationToken).ConfigureAwait(false);
+        var path = $"v1/movies/search?q={Uri.EscapeDataString(query)}";
+        return await GetJsonAsync<MetaTubeSearchResponse>(path, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -45,8 +33,8 @@ public class MetaTubeApiClient
     /// </summary>
     public async Task<MetaTubeMovieResponse?> GetMovieAsync(string provider, string id, CancellationToken cancellationToken)
     {
-        var url = $"v1/movies/{Uri.EscapeDataString(provider)}/{Uri.EscapeDataString(id)}";
-        return await _httpClient.GetFromJsonAsync<MetaTubeMovieResponse>(url, cancellationToken).ConfigureAwait(false);
+        var path = $"v1/movies/{Uri.EscapeDataString(provider)}/{Uri.EscapeDataString(id)}";
+        return await GetJsonAsync<MetaTubeMovieResponse>(path, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -54,8 +42,31 @@ public class MetaTubeApiClient
     /// </summary>
     public async Task<MetaTubeActorSearchResponse?> SearchActorAsync(string name, CancellationToken cancellationToken)
     {
-        var url = $"v1/actors/search?q={Uri.EscapeDataString(name)}";
-        return await _httpClient.GetFromJsonAsync<MetaTubeActorSearchResponse>(url, cancellationToken).ConfigureAwait(false);
+        var path = $"v1/actors/search?q={Uri.EscapeDataString(name)}";
+        return await GetJsonAsync<MetaTubeActorSearchResponse>(path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<T?> GetJsonAsync<T>(string path, CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration;
+        var serverUrl = config?.MetaTubeServerUrl;
+        if (string.IsNullOrWhiteSpace(serverUrl))
+        {
+            return default;
+        }
+
+        var httpClient = _httpClientFactory.CreateClient(PluginServiceRegistrator.MetaTubeHttpClientName);
+        var requestUri = new Uri(new Uri(serverUrl.TrimEnd('/') + "/"), path);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        if (!string.IsNullOrEmpty(config?.MetaTubeToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.MetaTubeToken);
+        }
+
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
 

@@ -6,12 +6,13 @@
     "name": "InnerShelf",
     "overview": "Automatic metadata scraping for adult video libraries",
     "owner": "Lynthar",
-    "targetAbi": "10.11.0.0",
+    "targetAbi": "10.11.8.0",
     "timestamp": "2026-04-12T00:00:00Z",
     "version": "0.1.0.0",
     "status": "Active",
     "autoUpdate": true,
     "assemblies": [
-        "Jellyfin.Plugin.InnerShelf.dll"
+        "Jellyfin.Plugin.InnerShelf.dll",
+        "AngleSharp.dll"
     ]
 }

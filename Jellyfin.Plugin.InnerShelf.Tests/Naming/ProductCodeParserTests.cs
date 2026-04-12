@@ -84,16 +84,97 @@ public class ProductCodeParserTests
     }
 
     [Theory]
-    [InlineData("SSIS-001-C.mp4", true)]
-    [InlineData("ABP-100-ch.mkv", true)]
-    [InlineData("STARS-456-chinese.mp4", true)]
-    [InlineData("MIDV-001.mp4", false)]
-    public void Parse_DetectsChineseSubtitleSuffix(string filename, bool expectedHasSub)
+    [InlineData("SSIS-001-C.mp4", "SSIS-001", VersionFlags.ChineseSub)]
+    [InlineData("ABP-100-ch.mkv", "ABP-100", VersionFlags.ChineseSub)]
+    [InlineData("STARS-456-chinese.mp4", "STARS-456", VersionFlags.ChineseSub)]
+    [InlineData("ATID-576-C.mp4", "ATID-576", VersionFlags.ChineseSub)]
+    [InlineData("ATID-576-ch.mkv", "ATID-576", VersionFlags.ChineseSub)]
+    [InlineData("MIDV-001.mp4", "MIDV-001", VersionFlags.None)]
+    [InlineData("SSIS-001-C2.mp4", "SSIS-001", VersionFlags.ChineseSub | VersionFlags.Revision)]
+    public void Parse_DetectsChineseSubtitleSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
     {
         var result = ProductCodeParser.Parse(filename);
 
         Assert.NotNull(result);
-        Assert.Equal(expectedHasSub, result.HasChineseSub);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-U.mp4", "SSIS-001", VersionFlags.Uncensored)]
+    [InlineData("SSIS-001-UC.mp4", "SSIS-001", VersionFlags.Uncensored)]
+    [InlineData("SSIS-001-uncen.mp4", "SSIS-001", VersionFlags.Uncensored)]
+    [InlineData("SSIS-001-uncensored.mp4", "SSIS-001", VersionFlags.Uncensored)]
+    public void Parse_DetectsUncensoredLeakSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-HACK.mp4", "SSIS-001", VersionFlags.Hack)]
+    [InlineData("SSIS-001-hacked.mp4", "SSIS-001", VersionFlags.Hack)]
+    [InlineData("SSIS-001-decrypted.mp4", "SSIS-001", VersionFlags.Hack)]
+    public void Parse_DetectsHackSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-HD.mp4", "SSIS-001", VersionFlags.HdRemaster)]
+    [InlineData("SSIS-001-hd.mkv", "SSIS-001", VersionFlags.HdRemaster)]
+    public void Parse_DetectsHdRemasterSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-4K.mp4", "SSIS-001", VersionFlags.FourK)]
+    [InlineData("SSIS-001-4k.mkv", "SSIS-001", VersionFlags.FourK)]
+    public void Parse_Detects4KSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-v2.mp4", "SSIS-001", VersionFlags.Revision)]
+    [InlineData("SSIS-001-fix.mp4", "SSIS-001", VersionFlags.Revision)]
+    [InlineData("SSIS-001-2.mp4", "SSIS-001", VersionFlags.Revision)]
+    public void Parse_DetectsRevisionSuffix(string filename, string expectedCode, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCode, result.Normalized);
+        Assert.Equal(expectedFlags, result.Versions);
+    }
+
+    [Theory]
+    [InlineData("SSIS-001-C-HD.mp4", VersionFlags.ChineseSub | VersionFlags.HdRemaster)]
+    [InlineData("ATID-576-HD-C.mp4", VersionFlags.ChineseSub | VersionFlags.HdRemaster)]
+    [InlineData("SSIS-001-U-HACK.mp4", VersionFlags.Uncensored | VersionFlags.Hack)]
+    [InlineData("SSIS-001-C-4K.mp4", VersionFlags.ChineseSub | VersionFlags.FourK)]
+    public void Parse_DetectsCombinedVersionMarkers(string filename, VersionFlags expectedFlags)
+    {
+        var result = ProductCodeParser.Parse(filename);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedFlags, result.Versions);
     }
 
     [Theory]

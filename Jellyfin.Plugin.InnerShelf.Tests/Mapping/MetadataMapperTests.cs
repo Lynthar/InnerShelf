@@ -1,5 +1,6 @@
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.InnerShelf.Mapping;
+using Jellyfin.Plugin.InnerShelf.Naming;
 using Jellyfin.Plugin.InnerShelf.Sources.Models;
 using MediaBrowser.Model.Entities;
 using Xunit;
@@ -104,6 +105,34 @@ public class MetadataMapperTests
         Assert.Equal("Test", result.Name);
         Assert.Equal("https://example.com/thumb.jpg", result.ImageUrl);
         Assert.Equal(2024, result.ProductionYear);
+    }
+
+    [Fact]
+    public void ToMovieResult_WithVersionFlags_AddsVersionTags()
+    {
+        var source = new MovieMetadata { Code = "SSIS-001", Title = "Test" };
+        var parsedCode = new ProductCode(
+            Raw: "SSIS-001",
+            Normalized: "SSIS-001",
+            Category: CodeCategory.Censored,
+            Versions: VersionFlags.ChineseSub | VersionFlags.HdRemaster,
+            DiscNumber: null);
+
+        var result = MetadataMapper.ToMovieResult(source, parsedCode);
+
+        Assert.Contains("Version: Chinese Sub", result.Item.Tags);
+        Assert.Contains("Version: HD Remaster", result.Item.Tags);
+        Assert.DoesNotContain("Version: Uncensored Leak", result.Item.Tags);
+    }
+
+    [Fact]
+    public void ToMovieResult_WithoutParsedCode_NoVersionTags()
+    {
+        var source = new MovieMetadata { Code = "SSIS-001", Title = "Test" };
+
+        var result = MetadataMapper.ToMovieResult(source);
+
+        Assert.DoesNotContain(result.Item.Tags, t => t.StartsWith("Version:"));
     }
 
     [Fact]

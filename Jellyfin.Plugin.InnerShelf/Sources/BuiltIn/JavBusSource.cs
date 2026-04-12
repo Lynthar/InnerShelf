@@ -12,7 +12,7 @@ public class JavBusSource : IMetadataSource
 {
     private const string BaseUrl = "https://www.javbus.com";
     private readonly ILogger<JavBusSource> _logger;
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JavBusSource"/> class.
@@ -20,7 +20,7 @@ public class JavBusSource : IMetadataSource
     public JavBusSource(ILogger<JavBusSource> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
-        _httpClient = httpClientFactory.CreateClient("InnerShelf");
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <inheritdoc />
@@ -54,7 +54,7 @@ public class JavBusSource : IMetadataSource
             var href = link?.GetAttribute("href");
             var img = item.QuerySelector(".photo-frame img");
             var title = img?.GetAttribute("title");
-            var thumbSrc = img?.GetAttribute("src");
+            var thumbSrc = MakeAbsolute(img?.GetAttribute("src"));
 
             if (href is null)
             {
@@ -118,7 +118,7 @@ public class JavBusSource : IMetadataSource
 
         // Cover image
         var coverImg = container.QuerySelector(".screencap img");
-        var coverUrl = coverImg?.GetAttribute("src");
+        var coverUrl = MakeAbsolute(coverImg?.GetAttribute("src"));
 
         // Info fields
         var movie = new MovieMetadata
@@ -131,42 +131,55 @@ public class JavBusSource : IMetadataSource
             SourceId = sourceId
         };
 
-        // Parse info section
+        // Parse info section (date, runtime, director, studio, label, series)
         var infoSection = container.QuerySelector(".info");
         if (infoSection is not null)
         {
             ParseInfoSection(infoSection, movie);
         }
 
-        // Parse actors
-        var actorLinks = container.QuerySelectorAll("#star-list .star-name a");
-        var actors = new List<ActorInfo>();
-        foreach (var actorLink in actorLinks)
+        // Parse genres directly — the genres live inside `.info` but their <p> has no
+        // `.header` span (the header is on the PREVIOUS sibling p with `class="header"`).
+        // Use a direct selector that filters out the "submit" button span.
+        if (infoSection is not null)
         {
-            var actorName = actorLink.TextContent.Trim();
-            if (!string.IsNullOrEmpty(actorName))
-            {
-                // Try to find actor photo from the adjacent img
-                var actorBox = actorLink.Closest(".star-box");
-                var actorImg = actorBox?.QuerySelector("img");
-                var actorImgUrl = actorImg?.GetAttribute("src");
+            var genreLinks = infoSection.QuerySelectorAll(".genre > label > a");
+            movie.Genres = genreLinks
+                .Select(a => a.TextContent.Trim())
+                .Where(g => !string.IsNullOrEmpty(g))
+                .ToList();
+        }
 
-                actors.Add(new ActorInfo
-                {
-                    Name = actorName,
-                    ImageUrl = actorImgUrl
-                });
+        // Parse actors from #avatar-waterfall .avatar-box — each box has <span> name + <img> photo.
+        // Note: the older #star-list selector does not exist on current JavBus pages.
+        var avatarBoxes = container.QuerySelectorAll(".avatar-box");
+        var actors = new List<ActorInfo>();
+        foreach (var box in avatarBoxes)
+        {
+            var nameEl = box.QuerySelector("span");
+            var actorName = nameEl?.TextContent.Trim();
+            if (string.IsNullOrEmpty(actorName))
+            {
+                continue;
             }
+
+            var imgEl = box.QuerySelector("img");
+            var actorImgUrl = MakeAbsolute(imgEl?.GetAttribute("src"));
+
+            actors.Add(new ActorInfo
+            {
+                Name = actorName,
+                ImageUrl = actorImgUrl
+            });
         }
 
         movie.Actors = actors;
 
-        // Backdrop: full cover is typically the big image
-        if (!string.IsNullOrEmpty(coverUrl))
-        {
-            // JavBus uses /cover/ for front crop and /pics/ for full image
-            movie.BackdropUrl = coverUrl.Replace("/cover/", "/pics/", StringComparison.OrdinalIgnoreCase);
-        }
+        // JavBus has only a single cover image per movie (no separate backdrop). Reuse the
+        // same URL for both Primary and Backdrop so Jellyfin has something to display as the
+        // detail page background — the previous `/cover/ -> /pics/` URL rewrite was incorrect
+        // (the URL is already `/pics/cover/xxx_b.jpg` from JavBus).
+        movie.BackdropUrl = coverUrl;
 
         return movie;
     }
@@ -203,13 +216,44 @@ public class JavBusSource : IMetadataSource
         }
 
         var actorName = firstResult.QuerySelector("span")?.TextContent.Trim();
-        var imageUrl = firstResult.QuerySelector("img")?.GetAttribute("src");
+        var imageUrl = MakeAbsolute(firstResult.QuerySelector("img")?.GetAttribute("src"));
 
         return new ActorMetadata
         {
             Name = actorName ?? name,
             ImageUrl = imageUrl
         };
+    }
+
+    /// <summary>
+    /// Resolves a possibly-relative URL to an absolute URL against <see cref="BaseUrl"/>.
+    /// Handles: absolute http(s), protocol-relative (//cdn/...), root-relative (/path),
+    /// and bare paths. Returns null for null/empty input.
+    /// </summary>
+    private static string? MakeAbsolute(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return url;
+        }
+
+        if (url.StartsWith("//"))
+        {
+            return "https:" + url;
+        }
+
+        if (url.StartsWith('/'))
+        {
+            return BaseUrl.TrimEnd('/') + url;
+        }
+
+        return BaseUrl.TrimEnd('/') + "/" + url;
     }
 
     private static void ParseInfoSection(IElement infoSection, MovieMetadata movie)
@@ -259,14 +303,6 @@ public class JavBusSource : IMetadataSource
                 case "系列":
                     movie.Series = value;
                     break;
-                case "類別":
-                case "类别":
-                    var genreLinks = p.QuerySelectorAll("a");
-                    movie.Genres = genreLinks
-                        .Select(a => a.TextContent.Trim())
-                        .Where(g => !string.IsNullOrEmpty(g))
-                        .ToList();
-                    break;
             }
         }
     }
@@ -302,10 +338,13 @@ public class JavBusSource : IMetadataSource
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("Accept-Language", "zh-TW,zh;q=0.9");
+            var httpClient = _httpClientFactory.CreateClient(PluginServiceRegistrator.HttpClientName);
 
-            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Accept-Language", "zh-CN,zh-TW;q=0.9,zh;q=0.8,ja;q=0.5");
+            request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogDebug("HTTP {Status} from {Url}", response.StatusCode, url);

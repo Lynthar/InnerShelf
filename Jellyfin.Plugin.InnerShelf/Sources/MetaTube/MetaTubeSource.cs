@@ -18,7 +18,7 @@ public class MetaTubeSource : IMetadataSource
     public MetaTubeSource(ILogger<MetaTubeSource> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
-        _client = new MetaTubeApiClient(httpClientFactory.CreateClient("InnerShelf.MetaTube"));
+        _client = new MetaTubeApiClient(httpClientFactory);
     }
 
     /// <inheritdoc />
@@ -28,21 +28,8 @@ public class MetaTubeSource : IMetadataSource
     public int Priority => 5; // Higher priority than built-in scrapers when enabled
 
     /// <inheritdoc />
-    public bool IsEnabled
-    {
-        get
-        {
-            var config = Plugin.Instance?.Configuration;
-            if (config is null || string.IsNullOrWhiteSpace(config.MetaTubeServerUrl))
-            {
-                return false;
-            }
-
-            // Reconfigure client on each check to pick up config changes
-            _client.Configure(config.MetaTubeServerUrl, config.MetaTubeToken);
-            return true;
-        }
-    }
+    public bool IsEnabled =>
+        !string.IsNullOrWhiteSpace(Plugin.Instance?.Configuration.MetaTubeServerUrl);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SourceSearchResult>> SearchAsync(string query, CancellationToken cancellationToken)

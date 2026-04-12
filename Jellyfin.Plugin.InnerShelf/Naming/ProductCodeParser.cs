@@ -7,11 +7,8 @@ namespace Jellyfin.Plugin.InnerShelf.Naming;
 /// </summary>
 public static partial class ProductCodeParser
 {
-    // Noise patterns to strip before matching
+    // Noise patterns to strip after version markers are detected
     private static readonly Regex NoisePattern = NoiseRegex();
-
-    // Chinese subtitle suffix detection
-    private static readonly Regex ChineseSubPattern = ChineseSubRegex();
 
     // Multi-disc suffix detection
     private static readonly Regex DiscPattern = DiscRegex();
@@ -42,13 +39,12 @@ public static partial class ProductCodeParser
         // Strip file extension
         var name = Path.GetFileNameWithoutExtension(filename);
 
-        // Detect and strip Chinese subtitle suffix
-        var chineseSubMatch = ChineseSubPattern.Match(name);
-        bool hasChineseSub = chineseSubMatch.Success;
-        if (hasChineseSub)
-        {
-            name = name[..chineseSubMatch.Index] + name[(chineseSubMatch.Index + chineseSubMatch.Length)..];
-        }
+        // Detect and strip version markers (chinese sub, uncensored leak, hack, HD, 4K, revision).
+        // Version markers must be dash- or underscore-prefixed. This happens BEFORE noise
+        // stripping so that dash-prefixed markers like `-HD` and `-4K` are recognized as
+        // version markers, while standalone `HD`/`4K`/`1080p` elsewhere are treated as noise.
+        var (versions, strippedName) = StripVersionMarkers(name);
+        name = strippedName;
 
         // Detect and strip multi-disc suffix
         var discMatch = DiscPattern.Match(name);
@@ -70,12 +66,67 @@ public static partial class ProductCodeParser
             {
                 var raw = match.Value;
                 var normalized = Normalize(raw, category);
-                return new ProductCode(raw, normalized, category, hasChineseSub, discNumber);
+                return new ProductCode(raw, normalized, category, versions, discNumber);
             }
         }
 
         return null;
     }
+
+    /// <summary>
+    /// Iteratively matches and strips version marker suffixes, returning the
+    /// combined flags and the cleaned-up name.
+    /// </summary>
+    private static (VersionFlags Flags, string Name) StripVersionMarkers(string name)
+    {
+        var flags = VersionFlags.None;
+
+        // Chinese sub (optional trailing digit means also Revision)
+        while (ChineseSubRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.ChineseSub;
+            if (m.Groups[1].Success)
+            {
+                flags |= VersionFlags.Revision;
+            }
+
+            name = Splice(name, m);
+        }
+
+        while (UncensoredLeakRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.Uncensored;
+            name = Splice(name, m);
+        }
+
+        while (HackRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.Hack;
+            name = Splice(name, m);
+        }
+
+        while (HdRemasterRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.HdRemaster;
+            name = Splice(name, m);
+        }
+
+        while (FourKRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.FourK;
+            name = Splice(name, m);
+        }
+
+        while (RevisionRegex().Match(name) is { Success: true } m)
+        {
+            flags |= VersionFlags.Revision;
+            name = Splice(name, m);
+        }
+
+        return (flags, name);
+    }
+
+    private static string Splice(string s, Match m) => s[..m.Index] + s[(m.Index + m.Length)..];
 
     private static string Normalize(string raw, CodeCategory category)
     {
@@ -116,11 +167,33 @@ public static partial class ProductCodeParser
     [GeneratedRegex(@"[\[\(].*?[\]\)]|1080[pi]|720[pi]|480[pi]|4K|2160[pi]|[xXhH]\.?26[45]|HEVC|AVC|AAC|MP4|MKV|AVI|WMV", RegexOptions.IgnoreCase)]
     private static partial Regex NoiseRegex();
 
-    [GeneratedRegex(@"[-_](?:C|ch|CH|chinese|中文字幕)(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
-    private static partial Regex ChineseSubRegex();
-
     [GeneratedRegex(@"[-_]cd(\d)(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
     private static partial Regex DiscRegex();
+
+    // Chinese subtitle marker. Matches optional trailing digit (e.g. -C2 = chinese sub revision 2).
+    [GeneratedRegex(@"[-_](?:chinese|中文字幕|CH|ch|C)(\d+)?(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex ChineseSubRegex();
+
+    // Uncensored leak / decrypted release (longer alternatives first to avoid premature match).
+    [GeneratedRegex(@"[-_](?:uncensored|uncen|UC|U)(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex UncensoredLeakRegex();
+
+    // Hack / decrypted edition.
+    [GeneratedRegex(@"[-_](?:hacked|decrypted|HACK)(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex HackRegex();
+
+    // HD remaster — dash-prefixed HD only, so `SSIS-001.1080p.HD.mp4` (dotted HD) is treated as noise elsewhere.
+    [GeneratedRegex(@"[-_]HD(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex HdRemasterRegex();
+
+    // 4K remaster — dash-prefixed only.
+    [GeneratedRegex(@"[-_]4K(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex FourKRegex();
+
+    // Generic revision marker: `-v2`, `-fix`, or plain `-2` / `-11` (1-2 digits).
+    // Plain-digit form must come AFTER product code (ProductCodeParser runs this after version markers).
+    [GeneratedRegex(@"[-_](?:v\d+|fix|\d{1,2})(?=[-_.\s]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex RevisionRegex();
 
     [GeneratedRegex(@"HEYZO[-_](\d{4})", RegexOptions.IgnoreCase)]
     private static partial Regex HeyzoRegex();

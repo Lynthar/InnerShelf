@@ -25,16 +25,49 @@ public enum CodeCategory
 }
 
 /// <summary>
+/// Version markers extracted from the filename (post-production edits,
+/// leaked variants, remasters, revisions, etc). Multiple flags can be set.
+/// </summary>
+[System.Flags]
+public enum VersionFlags
+{
+    /// <summary>No version markers detected.</summary>
+    None = 0,
+
+    /// <summary>Chinese subtitle (hardcoded), e.g. `-C`, `-ch`, `-中文字幕`.</summary>
+    ChineseSub = 1 << 0,
+
+    /// <summary>Uncensored leak / decrypted, e.g. `-U`, `-UC`, `-uncen`.</summary>
+    Uncensored = 1 << 1,
+
+    /// <summary>Decrypted / hack edition, e.g. `-HACK`, `-hacked`.</summary>
+    Hack = 1 << 2,
+
+    /// <summary>HD remaster edition, e.g. `-HD` (dash-prefixed only).</summary>
+    HdRemaster = 1 << 3,
+
+    /// <summary>4K remaster edition, e.g. `-4K` (dash-prefixed only).</summary>
+    FourK = 1 << 4,
+
+    /// <summary>Revised version (v2, fix, -2, etc).</summary>
+    Revision = 1 << 5,
+}
+
+/// <summary>
 /// Parsed JAV product code extracted from a filename.
 /// </summary>
 /// <param name="Raw">The raw matched string from the filename.</param>
 /// <param name="Normalized">Uppercased, canonical form of the code.</param>
 /// <param name="Category">The category of this product code.</param>
-/// <param name="HasChineseSub">Whether a Chinese subtitle suffix was detected.</param>
+/// <param name="Versions">Version markers detected in the filename.</param>
 /// <param name="DiscNumber">Multi-disc indicator, if detected.</param>
 public record ProductCode(
     string Raw,
     string Normalized,
     CodeCategory Category,
-    bool HasChineseSub,
-    int? DiscNumber);
+    VersionFlags Versions,
+    int? DiscNumber)
+{
+    /// <summary>Gets a value indicating whether this is a Chinese subtitle edition.</summary>
+    public bool HasChineseSub => Versions.HasFlag(VersionFlags.ChineseSub);
+}
