@@ -40,6 +40,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddHttpClient(SubtitleForgeHttpClientName)
             .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
 
+        serviceCollection.AddSingleton<Sources.MovieMetadataCache>();
         serviceCollection.AddSingleton<MetadataSourceManager>();
         serviceCollection.AddSingleton<IMetadataSource, JavBusSource>();
         serviceCollection.AddSingleton<IMetadataSource, MetaTubeSource>();

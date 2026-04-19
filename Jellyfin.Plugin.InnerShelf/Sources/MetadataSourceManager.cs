@@ -11,14 +11,19 @@ public class MetadataSourceManager
 {
     private readonly ILogger<MetadataSourceManager> _logger;
     private readonly IEnumerable<IMetadataSource> _sources;
+    private readonly MovieMetadataCache _cache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataSourceManager"/> class.
     /// </summary>
-    public MetadataSourceManager(ILogger<MetadataSourceManager> logger, IEnumerable<IMetadataSource> sources)
+    public MetadataSourceManager(
+        ILogger<MetadataSourceManager> logger,
+        IEnumerable<IMetadataSource> sources,
+        MovieMetadataCache cache)
     {
         _logger = logger;
         _sources = sources;
+        _cache = cache;
     }
 
     /// <summary>
@@ -71,10 +76,18 @@ public class MetadataSourceManager
 
     /// <summary>
     /// Retrieves movie metadata by searching all sources for the given code.
-    /// Returns the first successful result.
+    /// Returns the first successful result. Results (including misses) are
+    /// cached for a short TTL so that the metadata provider and image
+    /// provider don't both hit the network during a single library scan.
     /// </summary>
     public async Task<MovieMetadata?> GetMovieByCodeAsync(string code, CancellationToken cancellationToken)
     {
+        if (_cache.TryGet(code, out var cached))
+        {
+            _logger.LogDebug("Cache hit for code '{Code}'", code);
+            return cached;
+        }
+
         foreach (var source in GetEnabledSources())
         {
             try
@@ -86,6 +99,7 @@ public class MetadataSourceManager
                     if (movie is not null)
                     {
                         _logger.LogDebug("Found metadata for '{Code}' from {Source}", code, source.Name);
+                        _cache.Set(code, movie);
                         return movie;
                     }
                 }
@@ -96,6 +110,10 @@ public class MetadataSourceManager
             }
         }
 
+        // Cache the negative result too — repeated misses for the same code
+        // (e.g. the image provider following up after the metadata provider
+        // returned nothing) shouldn't re-walk every source.
+        _cache.Set(code, null);
         return null;
     }
 
