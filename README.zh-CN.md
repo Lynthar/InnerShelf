@@ -12,6 +12,7 @@
 - **丰富的标签分类** — 将制作商、厂牌、系列、类型、演员映射到 Jellyfin 原生元数据字段
 - **客户端兼容** — 使用标准 Jellyfin `Movie` 类型，兼容 Infuse、Swiftfin、Jellyfin Web 及所有其他客户端
 - **演员头像** — 自动获取演员头像图片
+- **字幕生成** — 可选与 [subtitle-forge](https://github.com/Lynthar/subtitle-forge) 集成，将视频交由远程 GPU 主机生成并翻译字幕，按影片手动触发
 
 ## 安装
 
@@ -43,6 +44,12 @@
 | MetaTube Server URL | 连接 MetaTube 后端（留空则禁用） | 空 |
 | Title Template | 显示标题格式（`{code}`、`{title}`） | `{code} {title}` |
 | HTTP Proxy | 元数据请求代理 | 空 |
+| Subtitle Forge Server URL | [subtitle-forge](https://github.com/Lynthar/subtitle-forge) 服务器地址（留空则禁用） | 空 |
+| Subtitle Forge Token | Bearer Token，必须与 GPU 主机上的 `SUBTITLE_FORGE_TOKEN` 一致 | 空 |
+| Subtitle Languages | 目标字幕语言，逗号分隔（如 `zh`、`zh,en`） | `zh` |
+| Keep Original Subtitle | 保留源语言 `.srt`，与翻译版并存 | 开启 |
+| Bilingual Subtitles | 将源 + 目标合并为一个 `.<src>-<tgt>.srt` | 关闭 |
+| Path Mappings | Jellyfin 路径前缀 → subtitle-forge 路径前缀重写规则 | 空 |
 
 ## 工作原理
 
@@ -80,6 +87,42 @@ InnerShelf 从文件名中解析番号，支持以下格式：
 | 完整封面 | Backdrop Image |
 | 分级 | `XXX` |
 
+## 字幕生成（可选）
+
+InnerShelf 可以把视频文件交给运行在另一台 GPU 主机上的 [subtitle-forge](https://github.com/Lynthar/subtitle-forge)
+服务器处理。生成是**按影片手动触发**的 —— 没有自动后台处理、没有定时扫描。
+
+### 部署步骤
+
+1. 在 GPU 主机上以服务器模式运行 subtitle-forge（参见其 README）。
+   需要一个 bearer token，用 `openssl rand -hex 32` 生成。
+2. 在 InnerShelf 配置页填写 **Subtitle Generation** 区域：
+   - **Server URL** — `http://<gpu-host>:8765`
+   - **Bearer Token** — 与 GPU 主机上的 `SUBTITLE_FORGE_TOKEN` 一致
+   - **Path Mappings** — 如果 Jellyfin 和 GPU 主机看到的存储路径不同
+     （例如 Jellyfin 看到 `/media/jav`，GPU 主机通过 SMB 挂载到
+     `/Volumes/nas-jav`），加一条重写规则。最长前缀匹配。
+
+### 触发字幕生成
+
+Jellyfin Web 没有原生的影片级按钮，使用书签代替 —— 把下面这段保存成浏览器书签：
+
+```javascript
+javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('当前不是影片详情页');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('已提交：'+t):('失败 '+r.status+'：'+t));}).catch(e=>alert('网络错误：'+e));})();
+```
+
+打开任意影片详情页 → 点击书签 → 弹窗显示 job id 即提交成功。
+此接口要求管理员权限（`RequiresElevation`）。
+
+### 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | 提交任务，`languages` 可选，未传时使用插件配置 |
+| `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | 代理到 subtitle-forge 的 `GET /jobs/{id}`；走 Jellyfin 鉴权，无需把 subtitle-forge token 暴露给客户端 |
+
+生成的 `.srt` 文件直接写到视频同目录，Jellyfin 下次扫库或刷新元数据时自动识别。
+
 ## 从源码构建
 
 需要 [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)。
@@ -104,6 +147,7 @@ Jellyfin.Plugin.InnerShelf/
 ├── Providers/       # Jellyfin 元数据和图片提供者
 ├── Mapping/         # 内部模型 → Jellyfin 类型映射
 ├── ExternalIds/     # 番号作为 Jellyfin 外部 ID
+├── Subtitles/       # subtitle-forge HTTP 客户端 + REST 控制器 + 路径映射器
 └── Configuration/   # 插件配置和 Web UI
 ```
 

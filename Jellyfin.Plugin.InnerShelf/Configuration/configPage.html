@@ -71,6 +71,70 @@
                     </div>
                 </div>
 
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Subtitle Generation (subtitle-forge)</h3>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="SubtitleForgeServerUrl">
+                            Server URL (leave empty to disable)
+                        </label>
+                        <input id="SubtitleForgeServerUrl" type="text" is="emby-input"
+                               placeholder="http://desktop.local:8765" />
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="SubtitleForgeToken">
+                            Bearer Token
+                        </label>
+                        <input id="SubtitleForgeToken" type="password" is="emby-input" />
+                        <div class="fieldDescription">
+                            Must match the SUBTITLE_FORGE_TOKEN env var on the GPU host.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="SubtitleLanguages">
+                            Target Languages
+                        </label>
+                        <input id="SubtitleLanguages" type="text" is="emby-input"
+                               placeholder="zh" />
+                        <div class="fieldDescription">
+                            Comma-separated ISO 639-1 codes (e.g. <code>zh</code>, <code>zh,en</code>).
+                            Each language gets its own SRT file.
+                        </div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="SubtitleKeepOriginal" type="checkbox" is="emby-checkbox" />
+                            <span>Keep original-language subtitle (e.g. .ja.srt) alongside translations</span>
+                        </label>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="SubtitleBilingual" type="checkbox" is="emby-checkbox" />
+                            <span>Bilingual subtitles (merge source + target into one .ja-zh.srt)</span>
+                        </label>
+                    </div>
+
+                    <h4 class="sectionTitle" style="margin-top: 1.5em;">Path Mappings</h4>
+                    <div class="fieldDescription" style="margin-bottom: 0.5em;">
+                        Rewrite the path Jellyfin sees into what the subtitle-forge host sees
+                        (e.g. <code>/media/jav</code> &rarr; <code>/Volumes/nas-jav</code>).
+                        Longest matching prefix wins. Leave empty if both hosts mount the same paths.
+                    </div>
+                    <table id="SubtitlePathMappings" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left;">
+                                <th style="padding: 4px;">Jellyfin path prefix</th>
+                                <th style="padding: 4px;">subtitle-forge path prefix</th>
+                                <th style="width: 4em;"></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <button id="AddPathMapping" type="button" is="emby-button" class="emby-button"
+                            style="margin-top: 0.5em;">
+                        <span>+ Add mapping</span>
+                    </button>
+                </div>
+
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                         <span>Save</span>
@@ -84,6 +148,46 @@
         (function () {
             var pluginUniqueId = 'd4a1b2c3-e5f6-4a90-abcd-ef1234567890';
 
+            function renderPathMappings(mappings) {
+                var tbody = document.querySelector('#SubtitlePathMappings tbody');
+                tbody.innerHTML = '';
+                (mappings || []).forEach(function (m) {
+                    addPathMappingRow(m.JellyfinPrefix || '', m.RemotePrefix || '');
+                });
+            }
+
+            function addPathMappingRow(jellyfinPrefix, remotePrefix) {
+                var tbody = document.querySelector('#SubtitlePathMappings tbody');
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td style="padding: 2px;"><input type="text" is="emby-input" class="js-jellyfin-prefix" placeholder="/media/jav" style="width: 100%;" /></td>' +
+                    '<td style="padding: 2px;"><input type="text" is="emby-input" class="js-remote-prefix" placeholder="/Volumes/nas-jav" style="width: 100%;" /></td>' +
+                    '<td style="padding: 2px; text-align: center;"><button type="button" is="emby-button" class="emby-button js-remove-mapping">&times;</button></td>';
+                tr.querySelector('.js-jellyfin-prefix').value = jellyfinPrefix;
+                tr.querySelector('.js-remote-prefix').value = remotePrefix;
+                tr.querySelector('.js-remove-mapping').addEventListener('click', function () {
+                    tr.remove();
+                });
+                tbody.appendChild(tr);
+            }
+
+            function collectPathMappings() {
+                var rows = document.querySelectorAll('#SubtitlePathMappings tbody tr');
+                var out = [];
+                rows.forEach(function (tr) {
+                    var j = tr.querySelector('.js-jellyfin-prefix').value.trim();
+                    var r = tr.querySelector('.js-remote-prefix').value.trim();
+                    if (j && r) {
+                        out.push({ JellyfinPrefix: j, RemotePrefix: r });
+                    }
+                });
+                return out;
+            }
+
+            document.querySelector('#AddPathMapping').addEventListener('click', function () {
+                addPathMappingRow('', '');
+            });
+
             document.querySelector('#InnerShelfConfigPage')
                 .addEventListener('pageshow', function () {
                     Dashboard.showLoadingMsg();
@@ -94,6 +198,14 @@
                         document.querySelector('#MetaTubeToken').value = config.MetaTubeToken || '';
                         document.querySelector('#TitleTemplate').value = config.TitleTemplate || '{code} {title}';
                         document.querySelector('#HttpProxy').value = config.HttpProxy || '';
+
+                        document.querySelector('#SubtitleForgeServerUrl').value = config.SubtitleForgeServerUrl || '';
+                        document.querySelector('#SubtitleForgeToken').value = config.SubtitleForgeToken || '';
+                        document.querySelector('#SubtitleLanguages').value = config.SubtitleLanguages || 'zh';
+                        document.querySelector('#SubtitleKeepOriginal').checked = config.SubtitleKeepOriginal !== false;
+                        document.querySelector('#SubtitleBilingual').checked = !!config.SubtitleBilingual;
+                        renderPathMappings(config.SubtitlePathMappings);
+
                         Dashboard.hideLoadingMsg();
                     });
                 });
@@ -108,6 +220,14 @@
                         config.MetaTubeToken = document.querySelector('#MetaTubeToken').value;
                         config.TitleTemplate = document.querySelector('#TitleTemplate').value.trim();
                         config.HttpProxy = document.querySelector('#HttpProxy').value.trim();
+
+                        config.SubtitleForgeServerUrl = document.querySelector('#SubtitleForgeServerUrl').value.trim();
+                        config.SubtitleForgeToken = document.querySelector('#SubtitleForgeToken').value;
+                        config.SubtitleLanguages = document.querySelector('#SubtitleLanguages').value.trim();
+                        config.SubtitleKeepOriginal = document.querySelector('#SubtitleKeepOriginal').checked;
+                        config.SubtitleBilingual = document.querySelector('#SubtitleBilingual').checked;
+                        config.SubtitlePathMappings = collectPathMappings();
+
                         ApiClient.updatePluginConfiguration(pluginUniqueId, config).then(function () {
                             Dashboard.processPluginConfigurationUpdateResult();
                         });

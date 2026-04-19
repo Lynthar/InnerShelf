@@ -12,6 +12,7 @@ A Jellyfin plugin for managing adult video libraries. Install it on a vanilla Je
 - **Rich Tagging** — Maps studios, labels, series, genres, and actors to Jellyfin's native metadata fields
 - **Client Compatible** — Uses standard Jellyfin `Movie` type, works with Infuse, Swiftfin, Jellyfin Web, and all other clients
 - **Actor Photos** — Fetches actress profile images automatically
+- **Subtitle Generation** — Optional integration with [subtitle-forge](https://github.com/Lynthar/subtitle-forge) to generate and translate subtitles on a remote GPU host, triggered manually per-item
 
 ## Installation
 
@@ -43,6 +44,12 @@ After installation, go to **Administration → Plugins → InnerShelf** to confi
 | MetaTube Server URL | Connect to a MetaTube backend (leave empty to disable) | Empty |
 | Title Template | Display title format (`{code}`, `{title}`) | `{code} {title}` |
 | HTTP Proxy | Proxy for metadata requests | Empty |
+| Subtitle Forge Server URL | URL of a [subtitle-forge](https://github.com/Lynthar/subtitle-forge) server (leave empty to disable) | Empty |
+| Subtitle Forge Token | Bearer token, must match `SUBTITLE_FORGE_TOKEN` on the GPU host | Empty |
+| Subtitle Languages | Comma-separated target languages (e.g. `zh`, `zh,en`) | `zh` |
+| Keep Original Subtitle | Save the source-language `.srt` alongside translations | On |
+| Bilingual Subtitles | Merge source + target into one `.<src>-<tgt>.srt` | Off |
+| Path Mappings | Rewrite Jellyfin-side paths to subtitle-forge-side paths | Empty |
 
 ## How It Works
 
@@ -80,6 +87,46 @@ Chinese subtitle suffixes (`-C`, `-ch`) and multi-disc indicators (`-cd1`, `-cd2
 | Full Cover | Backdrop Image |
 | Rating | `XXX` |
 
+## Subtitle Generation (Optional)
+
+InnerShelf can hand off video files to a [subtitle-forge](https://github.com/Lynthar/subtitle-forge)
+server running on a separate GPU machine. Generation is **manual per item** —
+no automatic background processing, no scheduled scans.
+
+### Setup
+
+1. On the GPU host, install and run subtitle-forge in server mode (see its README).
+   You'll need a bearer token — generate one with `openssl rand -hex 32`.
+2. In InnerShelf settings, fill the **Subtitle Generation** section:
+   - **Server URL** — `http://<gpu-host>:8765`
+   - **Bearer Token** — same value as `SUBTITLE_FORGE_TOKEN` on the GPU host
+   - **Path Mappings** — if Jellyfin and the GPU host see the storage at
+     different paths (e.g. Jellyfin sees `/media/jav`, the GPU host has it
+     mounted at `/Volumes/nas-jav` over SMB), add the rewrite rule.
+     Longest prefix wins.
+
+### Triggering generation
+
+There's no native per-item button in Jellyfin Web. Use a bookmarklet — save
+this as a browser bookmark:
+
+```javascript
+javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('Open a movie detail page first');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('Submitted: '+t):('Failed '+r.status+': '+t));}).catch(e=>alert('Network error: '+e));})();
+```
+
+Open any movie detail page → click the bookmark → an alert shows the job id
+on success. The endpoint requires admin (`RequiresElevation`).
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | Submit a job. `languages` optional, falls back to plugin config. |
+| `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | Proxy to subtitle-forge `GET /jobs/{id}`; uses Jellyfin auth, no need to expose subtitle-forge token to clients. |
+
+Output `.srt` files are written next to the source video; Jellyfin picks them
+up automatically on the next library scan or item refresh.
+
 ## Building from Source
 
 Requires [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
@@ -104,6 +151,7 @@ Jellyfin.Plugin.InnerShelf/
 ├── Providers/       # Jellyfin metadata & image providers
 ├── Mapping/         # Internal models → Jellyfin types
 ├── ExternalIds/     # Product code as Jellyfin external ID
+├── Subtitles/       # subtitle-forge HTTP client + REST controller + path mapper
 └── Configuration/   # Plugin settings & web UI
 ```
 

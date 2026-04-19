@@ -23,6 +23,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// </summary>
     public const string MetaTubeHttpClientName = "InnerShelf.MetaTube";
 
+    /// <summary>
+    /// Name of the HttpClient used for subtitle-forge requests.
+    /// </summary>
+    public const string SubtitleForgeHttpClientName = "InnerShelf.SubtitleForge";
+
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
@@ -32,9 +37,14 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddHttpClient(MetaTubeHttpClientName)
             .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
 
+        serviceCollection.AddHttpClient(SubtitleForgeHttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
+
         serviceCollection.AddSingleton<MetadataSourceManager>();
         serviceCollection.AddSingleton<IMetadataSource, JavBusSource>();
         serviceCollection.AddSingleton<IMetadataSource, MetaTubeSource>();
+
+        serviceCollection.AddSingleton<Subtitles.SubtitleForgeClient>();
     }
 
     /// <summary>
