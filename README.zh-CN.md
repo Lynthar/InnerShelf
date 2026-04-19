@@ -14,6 +14,10 @@
 - **演员头像** — 自动获取演员头像图片
 - **字幕生成** — 可选与 [subtitle-forge](https://github.com/Lynthar/subtitle-forge) 集成，将视频交由远程 GPU 主机生成并翻译字幕，按影片手动触发
 
+## 系统要求
+
+- **Jellyfin Server 10.11.0 或更高版本** —— 更旧的 patch 版本会在 `targetAbi` 检查时拒绝安装。
+
 ## 安装
 
 ### 从插件仓库安装（推荐）
@@ -40,7 +44,7 @@
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | Enable JavBus | 启用 JavBus 数据源 | 开启 |
-| Enable FANZA | 启用 FANZA/DMM 数据源 | 开启 |
+| Enable FANZA | _计划中_ —— 配置项已接入，但 FANZA 爬虫尚未实现 | 开启 |
 | MetaTube Server URL | 连接 MetaTube 后端（留空则禁用） | 空 |
 | Title Template | 显示标题格式（`{code}`、`{title}`） | `{code} {title}` |
 | HTTP Proxy | 元数据请求代理 | 空 |
@@ -142,7 +146,7 @@ dotnet test
 Jellyfin.Plugin.InnerShelf/
 ├── Naming/          # 文件名番号解析
 ├── Sources/         # 元数据源抽象层
-│   ├── BuiltIn/     # JavBus、FANZA 爬虫
+│   ├── BuiltIn/     # JavBus 爬虫
 │   └── MetaTube/    # 可选 MetaTube 后端连接器
 ├── Providers/       # Jellyfin 元数据和图片提供者
 ├── Mapping/         # 内部模型 → Jellyfin 类型映射
@@ -150,6 +154,22 @@ Jellyfin.Plugin.InnerShelf/
 ├── Subtitles/       # subtitle-forge HTTP 客户端 + REST 控制器 + 路径映射器
 └── Configuration/   # 插件配置和 Web UI
 ```
+
+## 维护
+
+插件通过 `Jellyfin.Plugin.InnerShelf/meta.json` 和 `build.yaml` 里的
+`targetAbi` 锁定最低 Jellyfin Server 版本 `10.11.0+`（两个值必须一致）。
+CI（`.github/workflows/build-test.yml`）会在每次 push/PR 时跑
+`dotnet build` + `dotnet test`；Dependabot（`.github/dependabot.yml`）
+每周一扫一次 Jellyfin SDK 是否有新版，自动开 PR。csproj 里
+`TreatWarningsAsErrors=true`，任何 deprecated 警告会让 CI 直接失败，
+bad SDK bump 在 merge 前就被拦下。
+
+Jellyfin 出新版时：
+
+- **Patch（如 `10.11.8` → `10.11.9`）** —— CI 绿就 merge Dependabot PR，不需要 bump `targetAbi`（没必要把还在旧 patch 的用户排除）。
+- **Minor（如 `10.11` → `10.12`)** —— 同上，加上用 Docker 真机 smoke test（`docker run --rm -p 8096:8096 -v /tmp/jf:/config jellyfin/jellyfin:10.12.0`，把编译产物 copy 到 `/tmp/jf/plugins/InnerShelf/`，重启，验证插件能加载且能跑一次抓取）；通过就在 `meta.json` 和 `build.yaml` 同步 bump `targetAbi`，打 release tag。
+- **Major（如 `10.x` → `11.0`）** —— 当 port 项目处理，Jellyfin 大版本通常会改 plugin API。
 
 ## 许可证
 

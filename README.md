@@ -14,6 +14,10 @@ A Jellyfin plugin for managing adult video libraries. Install it on a vanilla Je
 - **Actor Photos** — Fetches actress profile images automatically
 - **Subtitle Generation** — Optional integration with [subtitle-forge](https://github.com/Lynthar/subtitle-forge) to generate and translate subtitles on a remote GPU host, triggered manually per-item
 
+## Requirements
+
+- **Jellyfin Server 10.11.0 or newer** — older patch releases will reject the install via `targetAbi` check.
+
 ## Installation
 
 ### From Plugin Repository (Recommended)
@@ -40,7 +44,7 @@ After installation, go to **Administration → Plugins → InnerShelf** to confi
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Enable JavBus | Use JavBus as a metadata source | On |
-| Enable FANZA | Use FANZA/DMM as a metadata source | On |
+| Enable FANZA | _Planned_ — checkbox is wired to config but FANZA scraper is not yet implemented | On |
 | MetaTube Server URL | Connect to a MetaTube backend (leave empty to disable) | Empty |
 | Title Template | Display title format (`{code}`, `{title}`) | `{code} {title}` |
 | HTTP Proxy | Proxy for metadata requests | Empty |
@@ -146,7 +150,7 @@ The compiled plugin DLL will be at `Jellyfin.Plugin.InnerShelf/bin/Debug/net9.0/
 Jellyfin.Plugin.InnerShelf/
 ├── Naming/          # Product code parsing from filenames
 ├── Sources/         # Metadata source abstraction
-│   ├── BuiltIn/     # JavBus, FANZA scrapers
+│   ├── BuiltIn/     # JavBus scraper
 │   └── MetaTube/    # Optional MetaTube backend connector
 ├── Providers/       # Jellyfin metadata & image providers
 ├── Mapping/         # Internal models → Jellyfin types
@@ -154,6 +158,22 @@ Jellyfin.Plugin.InnerShelf/
 ├── Subtitles/       # subtitle-forge HTTP client + REST controller + path mapper
 └── Configuration/   # Plugin settings & web UI
 ```
+
+## Maintaining
+
+The plugin pins to Jellyfin Server `10.11.0+` via `targetAbi` in
+`Jellyfin.Plugin.InnerShelf/meta.json` and `build.yaml` (both must match).
+CI (`.github/workflows/build-test.yml`) runs `dotnet build` + `dotnet test`
+on every push/PR; Dependabot (`.github/dependabot.yml`) opens a weekly PR
+when the Jellyfin SDK has a new version. `TreatWarningsAsErrors=true` in
+the csproj turns any deprecated-API warning into a CI failure, so a bad
+SDK bump fails before merge.
+
+When Jellyfin releases a new version:
+
+- **Patch (e.g. `10.11.8` → `10.11.9`)** — merge the Dependabot PR if CI is green. Don't bump `targetAbi` (no need to exclude users still on the older patch).
+- **Minor (e.g. `10.11` → `10.12`)** — merge after also smoke-testing on a real server (`docker run --rm -p 8096:8096 -v /tmp/jf:/config jellyfin/jellyfin:10.12.0`, copy the built DLL into `/tmp/jf/plugins/InnerShelf/`, restart, verify plugin loads + a scrape works). If green, bump `targetAbi` in **both** `meta.json` and `build.yaml`, then tag a release.
+- **Major (e.g. `10.x` → `11.0`)** — treat as a port branch; major releases typically break plugin APIs.
 
 ## License
 
