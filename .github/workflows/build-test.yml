@@ -1,0 +1,32 @@
+name: build-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Manual trigger for ad-hoc verification (e.g., after editing version refs).
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        # TreatWarningsAsErrors=true in the csproj turns any deprecated-API
+        # warning from a newer Jellyfin SDK into a build failure — that's the
+        # whole point of running this on every Dependabot bump.
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
