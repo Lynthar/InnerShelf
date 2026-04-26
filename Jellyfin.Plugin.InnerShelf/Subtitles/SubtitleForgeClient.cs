@@ -56,6 +56,48 @@ public class SubtitleForgeClient
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Sends a lightweight GET to the configured server root and returns
+    /// true on any HTTP response (server is reachable), false on connection
+    /// failure or cancellation. Does not validate the bearer token, the
+    /// schema, or the response body — purely a "are you alive?" probe for
+    /// the configuration UI's Test Connection button.
+    /// </summary>
+    public async Task<bool> PingAsync(CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration;
+        var serverUrl = config?.SubtitleForgeServerUrl;
+        if (string.IsNullOrWhiteSpace(serverUrl))
+        {
+            return false;
+        }
+
+        var httpClient = _httpClientFactory.CreateClient(PluginServiceRegistrator.SubtitleForgeHttpClientName);
+        var requestUri = new Uri(serverUrl.TrimEnd('/') + "/");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+
+        var token = config?.SubtitleForgeToken;
+        if (!string.IsNullOrEmpty(token))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        try
+        {
+            using var response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogDebug(ex, "subtitle-forge ping to {Uri} failed", requestUri);
+            return false;
+        }
+    }
+
     private async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance?.Configuration;

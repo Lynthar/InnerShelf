@@ -90,6 +90,18 @@
                         </div>
                     </div>
                     <div class="inputContainer">
+                        <button id="TestSubtitleForge" type="button" is="emby-button"
+                                class="emby-button">
+                            <span>Test connection</span>
+                        </button>
+                        <div id="TestSubtitleForgeResult" class="fieldDescription"
+                             style="margin-top: 0.5em;"></div>
+                        <div class="fieldDescription">
+                            Tests the <strong>saved</strong> server URL &mdash;
+                            click Save first if you just changed the URL or token.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused" for="SubtitleLanguages">
                             Target Languages
                         </label>
@@ -186,6 +198,28 @@
 
             document.querySelector('#AddPathMapping').addEventListener('click', function () {
                 addPathMappingRow('', '');
+            });
+
+            document.querySelector('#TestSubtitleForge').addEventListener('click', function () {
+                var resultEl = document.querySelector('#TestSubtitleForgeResult');
+                resultEl.textContent = 'Testing…';
+                ApiClient.ajax({
+                    type: 'GET',
+                    url: ApiClient.getUrl('InnerShelf/Health'),
+                    dataType: 'json'
+                }).then(function (health) {
+                    var sf = health.SubtitleForge || {};
+                    if (!sf.Configured) {
+                        resultEl.textContent = 'Not configured (server URL is empty).';
+                    } else if (sf.Reachable === true) {
+                        resultEl.textContent = 'OK — reached ' + sf.Url;
+                    } else {
+                        resultEl.textContent = 'Failed — could not reach ' + sf.Url;
+                    }
+                }).catch(function (err) {
+                    var msg = (err && (err.statusText || err.message)) || String(err);
+                    resultEl.textContent = 'Health check failed: ' + msg;
+                });
             });
 
             document.querySelector('#InnerShelfConfigPage')
