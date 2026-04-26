@@ -49,7 +49,7 @@ After installation, go to **Administration → Plugins → InnerShelf** to confi
 | Title Template | Display title format (`{code}`, `{title}`) | `{code} {title}` |
 | HTTP Proxy | Proxy for metadata requests | Empty |
 | Subtitle Forge Server URL | URL of a [subtitle-forge](https://github.com/Lynthar/subtitle-forge) server (leave empty to disable) | Empty |
-| Subtitle Forge Token | Bearer token, must match `SUBTITLE_FORGE_TOKEN` on the GPU host | Empty |
+| Subtitle Forge Token | Bearer token, must match `SUBTITLE_FORGE_TOKEN` on the GPU host. The settings page has a **Test connection** button that probes reachability via `GET /InnerShelf/Health`. | Empty |
 | Subtitle Languages | Comma-separated target languages (e.g. `zh`, `zh,en`) | `zh` |
 | Keep Original Subtitle | Save the source-language `.srt` alongside translations | On |
 | Bilingual Subtitles | Merge source + target into one `.<src>-<tgt>.srt` | Off |
@@ -94,8 +94,10 @@ Chinese subtitle suffixes (`-C`, `-ch`) and multi-disc indicators (`-cd1`, `-cd2
 ## Subtitle Generation (Optional)
 
 InnerShelf can hand off video files to a [subtitle-forge](https://github.com/Lynthar/subtitle-forge)
-server running on a separate GPU machine. Generation is **manual per item** —
-no automatic background processing, no scheduled scans.
+server running on a separate GPU machine. Two trigger paths: a per-item
+bookmarklet, or the **InnerShelf: Backfill subtitles** scheduled task that
+walks the whole library and submits jobs for everything missing a sidecar
+SRT in any of the configured target languages.
 
 ### Setup
 
@@ -130,10 +132,13 @@ on success. The endpoint requires admin (`RequiresElevation`).
 
 ### Endpoints
 
+All admin-only (`RequiresElevation`).
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | Submit a job. `languages` optional, falls back to plugin config. |
 | `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | Proxy to subtitle-forge `GET /jobs/{id}`; uses Jellyfin auth, no need to expose subtitle-forge token to clients. |
+| `GET`  | `/InnerShelf/Health` | Plugin version, source enable/priority list, and subtitle-forge reachability (5s probe). Backs the configuration UI's Test Connection button. |
 
 Output `.srt` files are written next to the source video; Jellyfin picks them
 up automatically on the next library scan or item refresh.
@@ -156,13 +161,14 @@ The compiled plugin DLL will be at `Jellyfin.Plugin.InnerShelf/bin/Debug/net9.0/
 ```
 Jellyfin.Plugin.InnerShelf/
 ├── Naming/          # Product code parsing from filenames
-├── Sources/         # Metadata source abstraction
-│   ├── BuiltIn/     # JavBus scraper
+├── Sources/         # Metadata source abstraction + cross-source merger
+│   ├── BuiltIn/     # JavBus scraper (HTTP fetch + JavBusParser)
 │   └── MetaTube/    # Optional MetaTube backend connector
 ├── Providers/       # Jellyfin metadata & image providers
 ├── Mapping/         # Internal models → Jellyfin types
 ├── ExternalIds/     # Product code as Jellyfin external ID
-├── Subtitles/       # subtitle-forge HTTP client + REST controller + path mapper
+├── Subtitles/       # subtitle-forge client + REST controller + path mapper + library-wide backfill task
+├── Health/          # /InnerShelf/Health endpoint (used by the settings UI's Test Connection button)
 └── Configuration/   # Plugin settings & web UI
 ```
 
@@ -171,10 +177,11 @@ Jellyfin.Plugin.InnerShelf/
 The plugin pins to Jellyfin Server `10.11.0+` via `targetAbi` in
 `Jellyfin.Plugin.InnerShelf/meta.json` and `build.yaml` (both must match).
 CI (`.github/workflows/build-test.yml`) runs `dotnet build` + `dotnet test`
-on every push/PR; Dependabot (`.github/dependabot.yml`) opens a weekly PR
-when the Jellyfin SDK has a new version. `TreatWarningsAsErrors=true` in
-the csproj turns any deprecated-API warning into a CI failure, so a bad
-SDK bump fails before merge.
+on every push/PR. Dependabot (`.github/dependabot.yml`) opens PRs for
+NuGet packages weekly (Jellyfin.* are grouped) and for GitHub Actions
+monthly. `TreatWarningsAsErrors=true` in the csproj turns any
+deprecated-API warning into a CI failure, so a bad SDK bump fails before
+merge.
 
 ### Releases
 

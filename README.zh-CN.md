@@ -49,7 +49,7 @@
 | Title Template | 显示标题格式（`{code}`、`{title}`） | `{code} {title}` |
 | HTTP Proxy | 元数据请求代理 | 空 |
 | Subtitle Forge Server URL | [subtitle-forge](https://github.com/Lynthar/subtitle-forge) 服务器地址（留空则禁用） | 空 |
-| Subtitle Forge Token | Bearer Token，必须与 GPU 主机上的 `SUBTITLE_FORGE_TOKEN` 一致 | 空 |
+| Subtitle Forge Token | Bearer Token，必须与 GPU 主机上的 `SUBTITLE_FORGE_TOKEN` 一致。设置页有 **Test connection** 按钮，通过 `GET /InnerShelf/Health` 探测可达性。 | 空 |
 | Subtitle Languages | 目标字幕语言，逗号分隔（如 `zh`、`zh,en`） | `zh` |
 | Keep Original Subtitle | 保留源语言 `.srt`，与翻译版并存 | 开启 |
 | Bilingual Subtitles | 将源 + 目标合并为一个 `.<src>-<tgt>.srt` | 关闭 |
@@ -94,7 +94,8 @@ InnerShelf 从文件名中解析番号，支持以下格式：
 ## 字幕生成（可选）
 
 InnerShelf 可以把视频文件交给运行在另一台 GPU 主机上的 [subtitle-forge](https://github.com/Lynthar/subtitle-forge)
-服务器处理。生成是**按影片手动触发**的 —— 没有自动后台处理、没有定时扫描。
+服务器处理。两条触发路径：单条触发用浏览器书签；批量补全用 **InnerShelf:
+Backfill subtitles** 计划任务，遍历整个库为缺字幕的影片提交任务。
 
 ### 部署步骤
 
@@ -127,10 +128,13 @@ javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){al
 
 ### 接口
 
+全部要求管理员权限（`RequiresElevation`）。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | 提交任务，`languages` 可选，未传时使用插件配置 |
 | `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | 代理到 subtitle-forge 的 `GET /jobs/{id}`；走 Jellyfin 鉴权，无需把 subtitle-forge token 暴露给客户端 |
+| `GET`  | `/InnerShelf/Health` | 插件版本、各源开关 / 优先级、subtitle-forge 可达性（5s 探测）。配置页 Test Connection 按钮调它。 |
 
 生成的 `.srt` 文件直接写到视频同目录，Jellyfin 下次扫库或刷新元数据时自动识别。
 
@@ -152,13 +156,14 @@ dotnet test
 ```
 Jellyfin.Plugin.InnerShelf/
 ├── Naming/          # 文件名番号解析
-├── Sources/         # 元数据源抽象层
-│   ├── BuiltIn/     # JavBus 爬虫
+├── Sources/         # 元数据源抽象层 + 跨源合并器
+│   ├── BuiltIn/     # JavBus 爬虫（HTTP 抓取 + JavBusParser 解析）
 │   └── MetaTube/    # 可选 MetaTube 后端连接器
 ├── Providers/       # Jellyfin 元数据和图片提供者
 ├── Mapping/         # 内部模型 → Jellyfin 类型映射
 ├── ExternalIds/     # 番号作为 Jellyfin 外部 ID
-├── Subtitles/       # subtitle-forge HTTP 客户端 + REST 控制器 + 路径映射器
+├── Subtitles/       # subtitle-forge 客户端 + REST 控制器 + 路径映射器 + 库级补字幕任务
+├── Health/          # /InnerShelf/Health 端点（设置页 Test Connection 按钮调它）
 └── Configuration/   # 插件配置和 Web UI
 ```
 
@@ -167,8 +172,8 @@ Jellyfin.Plugin.InnerShelf/
 插件通过 `Jellyfin.Plugin.InnerShelf/meta.json` 和 `build.yaml` 里的
 `targetAbi` 锁定最低 Jellyfin Server 版本 `10.11.0+`（两个值必须一致）。
 CI（`.github/workflows/build-test.yml`）会在每次 push/PR 时跑
-`dotnet build` + `dotnet test`；Dependabot（`.github/dependabot.yml`）
-每周一扫一次 Jellyfin SDK 是否有新版，自动开 PR。csproj 里
+`dotnet build` + `dotnet test`。Dependabot（`.github/dependabot.yml`）
+每周扫 NuGet（`Jellyfin.*` 分组合并），每月扫 GitHub Actions。csproj 里
 `TreatWarningsAsErrors=true`，任何 deprecated 警告会让 CI 直接失败，
 bad SDK bump 在 merge 前就被拦下。
 
