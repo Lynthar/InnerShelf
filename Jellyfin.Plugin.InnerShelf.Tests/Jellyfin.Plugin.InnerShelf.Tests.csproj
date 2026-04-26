@@ -31,4 +31,10 @@
     <ProjectReference Include="..\Jellyfin.Plugin.InnerShelf\Jellyfin.Plugin.InnerShelf.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Sources\BuiltIn\Fixtures\*.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
