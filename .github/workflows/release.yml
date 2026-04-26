@@ -1,0 +1,139 @@
+name: release
+
+# Triggered by pushing a vN.N.N.N tag (canonical path), or manually via
+# workflow_dispatch with an existing tag (for re-running after a failed release).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v0.2.0.0). Must already be pushed.'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Resolve at the tag's commit, not at HEAD of the default branch — important
+      # for workflow_dispatch where github.ref is a branch ref, not the tag.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_TAG: ${{ github.ref_name }}
+        run: |
+          TAG="${INPUT_TAG:-$REF_TAG}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be of form vN.N.N.N (got: '$TAG')"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building $TAG (version=$VERSION)"
+
+      # meta.json's version is bumped here rather than expecting the dev to
+      # pre-edit it before tagging — keeps the source-of-truth on the tag and
+      # makes meta.json/tag drift impossible. The repo copy stays at whatever
+      # the last manual edit set; the released ZIP gets the rewritten copy.
+      - name: Sync meta.json version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          META="Jellyfin.Plugin.InnerShelf/meta.json"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq --arg v "$VERSION" --arg t "$NOW" \
+             '.version = $v | .timestamp = $t' "$META" > "$META.tmp"
+          mv "$META.tmp" "$META"
+          echo "--- meta.json after rewrite ---"
+          cat "$META"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          PLUGIN_DIR="Jellyfin.Plugin.InnerShelf/bin/Release/net9.0"
+          STAGING="staging"
+          ZIP_NAME="innershelf_${VERSION}.zip"
+
+          mkdir -p "$STAGING"
+          cp "$PLUGIN_DIR/Jellyfin.Plugin.InnerShelf.dll" "$STAGING/"
+          cp "$PLUGIN_DIR/AngleSharp.dll" "$STAGING/"
+          cp "$PLUGIN_DIR/meta.json" "$STAGING/"
+
+          (cd "$STAGING" && zip -r "../$ZIP_NAME" .)
+
+          # Jellyfin's plugin manifest format uses MD5 for the checksum field.
+          CHECKSUM="$(md5sum "$ZIP_NAME" | awk '{print $1}')"
+          echo "zip=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "Built $ZIP_NAME (md5=$CHECKSUM)"
+
+      # A standalone manifest entry suitable for later concatenation into a
+      # public manifest.json feed. Shipped as a release asset so anyone hosting
+      # a feed can grab it without re-running the workflow.
+      - name: Generate manifest entry
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ZIP: ${{ steps.package.outputs.zip }}
+          CHECKSUM: ${{ steps.package.outputs.checksum }}
+        run: |
+          META="Jellyfin.Plugin.InnerShelf/meta.json"
+          TARGET_ABI="$(jq -r '.targetAbi' "$META")"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          SOURCE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ZIP}"
+          CHANGELOG_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg targetAbi "$TARGET_ABI" \
+            --arg sourceUrl "$SOURCE_URL" \
+            --arg checksum "$CHECKSUM" \
+            --arg timestamp "$NOW" \
+            --arg changelog "See $CHANGELOG_URL" \
+            '{
+              version: $version,
+              changelog: $changelog,
+              targetAbi: $targetAbi,
+              sourceUrl: $sourceUrl,
+              checksum: $checksum,
+              timestamp: $timestamp
+            }' > manifest-entry.json
+
+          echo "--- manifest-entry.json ---"
+          cat manifest-entry.json
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: |
+            ${{ steps.package.outputs.zip }}
+            manifest-entry.json
+          generate_release_notes: true
+          fail_on_unmatched_files: true
