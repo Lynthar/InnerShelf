@@ -158,35 +158,39 @@ jobs:
             --arg ts "$NOW" \
             '{version: $v, changelog: $c, targetAbi: $t, sourceUrl: $s, checksum: $ck, timestamp: $ts}')
 
-          if jq -e --arg g "$GUID" 'any(.guid == $g)' manifest.json > /dev/null; then
-            # Plugin entry exists: dedup new version into versions array, sort newest-first.
-            jq --arg g "$GUID" --argjson nv "$NEW_VERSION" \
-              'map(if .guid == $g
-                   then .versions = ([$nv] + (.versions // []) | unique_by(.version) | sort_by(.timestamp) | reverse)
-                   else . end)' \
-              manifest.json > manifest.json.tmp
+          # Build the plugin entry from scratch each time so meta.json edits
+          # (description, imageUrl, etc.) propagate without manual gh-pages surgery.
+          # Existing versions are preserved; the new version is added, deduped by
+          # version, and sorted newest-first by timestamp.
+          EXISTING_VERSIONS=$(jq --arg g "$GUID" '[.[] | select(.guid == $g) | .versions[]?]' manifest.json)
+          MERGED_VERSIONS=$(echo "$EXISTING_VERSIONS" | jq --argjson nv "$NEW_VERSION" \
+            '[$nv] + . | unique_by(.version) | sort_by(.timestamp) | reverse')
+
+          if [ -n "$IMAGE_URL" ]; then
+            NEW_ENTRY=$(jq -n \
+              --arg g "$GUID" --arg n "$NAME" --arg d "$DESCRIPTION" --arg o "$OVERVIEW" \
+              --arg ow "$OWNER" --arg ct "$CATEGORY" --arg img "$IMAGE_URL" \
+              --argjson v "$MERGED_VERSIONS" \
+              '{guid: $g, name: $n, description: $d, overview: $o, owner: $ow, category: $ct, imageUrl: $img, versions: $v}')
           else
-            # First-time publish: create the plugin entry. imageUrl is included only
-            # when meta.json has a non-empty value.
-            if [ -n "$IMAGE_URL" ]; then
-              jq -n \
-                --arg g "$GUID" --arg n "$NAME" --arg d "$DESCRIPTION" --arg o "$OVERVIEW" \
-                --arg ow "$OWNER" --arg ct "$CATEGORY" --arg img "$IMAGE_URL" \
-                --argjson nv "$NEW_VERSION" \
-                '{guid: $g, name: $n, description: $d, overview: $o, owner: $ow, category: $ct, imageUrl: $img, versions: [$nv]}' \
-                > new-entry.json
-            else
-              jq -n \
-                --arg g "$GUID" --arg n "$NAME" --arg d "$DESCRIPTION" --arg o "$OVERVIEW" \
-                --arg ow "$OWNER" --arg ct "$CATEGORY" \
-                --argjson nv "$NEW_VERSION" \
-                '{guid: $g, name: $n, description: $d, overview: $o, owner: $ow, category: $ct, versions: [$nv]}' \
-                > new-entry.json
-            fi
-            jq --slurpfile e new-entry.json '. += $e' manifest.json > manifest.json.tmp
-            rm new-entry.json
+            NEW_ENTRY=$(jq -n \
+              --arg g "$GUID" --arg n "$NAME" --arg d "$DESCRIPTION" --arg o "$OVERVIEW" \
+              --arg ow "$OWNER" --arg ct "$CATEGORY" \
+              --argjson v "$MERGED_VERSIONS" \
+              '{guid: $g, name: $n, description: $d, overview: $o, owner: $ow, category: $ct, versions: $v}')
           fi
+
+          jq --arg g "$GUID" --argjson e "$NEW_ENTRY" \
+            'map(select(.guid != $g)) + [$e]' \
+            manifest.json > manifest.json.tmp
           mv manifest.json.tmp manifest.json
+
+          # Sync the plugin icon so the manifest's imageUrl resolves to a file on
+          # gh-pages (avoids cross-branch raw.githubusercontent.com hits).
+          if [ -f ../InnerShelf.png ]; then
+            cp ../InnerShelf.png .
+            git add InnerShelf.png
+          fi
 
           echo "--- manifest.json after update ---"
           cat manifest.json

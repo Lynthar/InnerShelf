@@ -6,6 +6,7 @@
     "name": "InnerShelf",
     "overview": "Automatic metadata scraping for adult video libraries",
     "owner": "Lynthar",
+    "imageUrl": "https://lynthar.github.io/InnerShelf/InnerShelf.png",
     "targetAbi": "10.11.0.0",
     "timestamp": "2026-04-12T00:00:00Z",
     "version": "0.1.0.0",
