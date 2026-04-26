@@ -75,10 +75,13 @@ public class MetadataSourceManager
     }
 
     /// <summary>
-    /// Retrieves movie metadata by searching all sources for the given code.
-    /// Returns the first successful result. Results (including misses) are
-    /// cached for a short TTL so that the metadata provider and image
-    /// provider don't both hit the network during a single library scan.
+    /// Retrieves movie metadata by querying every enabled source in priority
+    /// order. The highest-priority hit becomes the baseline; later sources
+    /// fill in fields that the baseline left empty (see
+    /// <see cref="MovieMetadataMerger"/>). The walk stops early once the
+    /// baseline is fully populated. Results (including misses) are cached
+    /// for a short TTL so the metadata provider and image provider don't
+    /// both hit the network during a single library scan.
     /// </summary>
     public async Task<MovieMetadata?> GetMovieByCodeAsync(string code, CancellationToken cancellationToken)
     {
@@ -88,20 +91,38 @@ public class MetadataSourceManager
             return cached;
         }
 
+        MovieMetadata? merged = null;
+
         foreach (var source in GetEnabledSources())
         {
             try
             {
                 var results = await source.SearchAsync(code, cancellationToken).ConfigureAwait(false);
-                if (results.Count > 0)
+                if (results.Count == 0)
                 {
-                    var movie = await source.GetMovieAsync(results[0].SourceId, cancellationToken).ConfigureAwait(false);
-                    if (movie is not null)
-                    {
-                        _logger.LogDebug("Found metadata for '{Code}' from {Source}", code, source.Name);
-                        _cache.Set(code, movie);
-                        return movie;
-                    }
+                    continue;
+                }
+
+                var movie = await source.GetMovieAsync(results[0].SourceId, cancellationToken).ConfigureAwait(false);
+                if (movie is null)
+                {
+                    continue;
+                }
+
+                if (merged is null)
+                {
+                    _logger.LogDebug("Baseline metadata for '{Code}' from {Source}", code, source.Name);
+                    merged = movie;
+                }
+                else
+                {
+                    _logger.LogDebug("Filling missing fields for '{Code}' from {Source}", code, source.Name);
+                    merged = MovieMetadataMerger.Merge(merged, movie);
+                }
+
+                if (MovieMetadataMerger.HasAllPrimaryFields(merged))
+                {
+                    break;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -110,11 +131,10 @@ public class MetadataSourceManager
             }
         }
 
-        // Cache the negative result too — repeated misses for the same code
-        // (e.g. the image provider following up after the metadata provider
-        // returned nothing) shouldn't re-walk every source.
-        _cache.Set(code, null);
-        return null;
+        // Cache the result (including null) so repeated lookups for the same
+        // code don't re-walk every source.
+        _cache.Set(code, merged);
+        return merged;
     }
 
     /// <summary>
