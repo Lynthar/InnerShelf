@@ -70,8 +70,15 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      # -p:Version injects the manifest version into AssemblyVersion / FileVersion
+      # / InformationalVersion. Without this, the DLL ships with .NET's default
+      # 1.0.0.0, which Jellyfin reads as the installed version and breaks the
+      # "is the manifest version newer?" comparison (1.0.0.0 always wins over
+      # any 0.x.y.z).
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: dotnet build --no-restore --configuration Release -p:Version=$VERSION
 
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
