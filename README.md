@@ -113,15 +113,54 @@ SRT in any of the configured target languages.
 
 ### Triggering generation
 
-Two ways:
+Two ways: a library-wide scheduled task for batch backfill, or a per-item
+bookmarklet for one-off generation.
 
-1. **Library-wide scheduled task** — Dashboard → Scheduled Tasks → "InnerShelf:
-   Backfill subtitles" → Run now. Iterates every InnerShelf-managed movie,
-   skips items that already have a `.<lang>.srt` sidecar for each configured
-   target language, and submits jobs for the rest. Runs on demand by default;
-   add a cron trigger in the Dashboard if you want it to run periodically.
+#### Library-wide backfill task
 
-2. **Per-item bookmarklet** for one-off generation — save this as a browser bookmark:
+Dashboard → **Scheduled Tasks** → find "**InnerShelf: Backfill subtitles**"
+under the InnerShelf category → click ▶ to run. The task iterates every
+InnerShelf-managed movie, skips items that already have a `<basename>.<lang>.srt`
+sidecar for each configured target language, and submits one job per missing
+language to subtitle-forge.
+
+> **Important — what "complete" means.** subtitle-forge accepts jobs
+> asynchronously: each `POST /jobs` returns immediately with a job id, and
+> subtitle-forge then processes the actual transcription/translation in its
+> own queue (which can take minutes to hours per item depending on GPU and
+> video length). The Jellyfin task reports 100% as soon as **all jobs are
+> submitted**, *not* when all subtitles are generated. The actual `.srt`
+> files appear in the file system gradually as subtitle-forge works through
+> its queue.
+
+**No default trigger** — runs only when you click ▶. To run periodically,
+edit the task's triggers in the same UI (e.g. weekly Sunday 3 AM).
+
+**Setting it up the first time** (recommended):
+
+1. Verify config: Plugins → InnerShelf → click **Test connection** under
+   Subtitle Forge — must be reachable.
+2. Temporarily set Subtitle Languages to a single language (e.g. `zh`) — so
+   the first run submits at most one job per movie.
+3. Run the task on a small library or wait for off-hours; a 500-movie
+   backfill can submit 500+ jobs in a few minutes, then subtitle-forge will
+   churn for hours.
+4. Once you've verified the flow works, expand Subtitle Languages to your
+   real list and re-run.
+
+**Verifying submissions** — Dashboard → **Logs** → search for
+`backfill: submitted job` to see one line per submitted job with its id, the
+movie's item id and path, and the languages requested. The aggregate line
+`backfill complete: N/M jobs submitted` follows when the task finishes.
+
+**Checking individual job progress** — there's no native UI for this. Use
+the bookmarklet pattern with `GET /InnerShelf/Subtitles/Jobs/{jobId}`
+(admin-authenticated proxy to subtitle-forge), substituting a job id from
+the logs above.
+
+#### Per-item bookmarklet
+
+For one-off generation on a movie detail page, save this as a browser bookmark:
 
 ```javascript
 javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('Open a movie detail page first');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('Submitted: '+t):('Failed '+r.status+': '+t));}).catch(e=>alert('Network error: '+e));})();
@@ -129,6 +168,40 @@ javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){al
 
 Open any movie detail page → click the bookmark → an alert shows the job id
 on success. The endpoint requires admin (`RequiresElevation`).
+
+### Output files & Jellyfin recognition
+
+subtitle-forge writes the generated `.srt` files to **the same directory as
+the source video**, named `<basename>.<lang>.srt`. Example with
+`SubtitleLanguages = "zh,en"` and `KeepOriginal = on`:
+
+```
+/media/jav/SSIS-001.mp4
+/media/jav/SSIS-001.zh.srt        ← translated to Chinese
+/media/jav/SSIS-001.en.srt        ← translated to English
+/media/jav/SSIS-001.ja.srt        ← original (kept because KeepOriginal is on)
+```
+
+Jellyfin pairs sidecar SRTs with videos by basename, so multiple movies in
+one directory each get their own non-conflicting subtitles:
+
+```
+/media/jav/
+├── SSIS-001.mp4   ↔ SSIS-001.zh.srt
+├── SSIS-002.mp4   ↔ SSIS-002.zh.srt
+└── ABP-100.mp4    ↔ ABP-100.zh.srt
+```
+
+**Picking them up in Jellyfin** — sidecar files aren't watched in real time:
+- Wait for the next scheduled library scan (Dashboard → Scheduled Tasks → Scan Library), or
+- Manually run **Scan All Libraries**, or
+- On a single item: ⋮ → Refresh metadata (any option works; the file scan happens regardless of which metadata refresh mode you pick).
+
+**Storage requirement** — Jellyfin and subtitle-forge **must see the same
+underlying storage**. Path Mappings only translate the path *prefix* between
+the two hosts; both views must point at the same files. If subtitle-forge
+writes to local storage on the GPU machine that Jellyfin can't reach, the
+SRTs won't appear in Jellyfin even though the task reports success.
 
 ### Endpoints
 
@@ -139,9 +212,6 @@ All admin-only (`RequiresElevation`).
 | `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | Submit a job. `languages` optional, falls back to plugin config. |
 | `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | Proxy to subtitle-forge `GET /jobs/{id}`; uses Jellyfin auth, no need to expose subtitle-forge token to clients. |
 | `GET`  | `/InnerShelf/Health` | Plugin version, source enable/priority list, and subtitle-forge reachability (5s probe). Backs the configuration UI's Test Connection button. |
-
-Output `.srt` files are written next to the source video; Jellyfin picks them
-up automatically on the next library scan or item refresh.
 
 ## Building from Source
 

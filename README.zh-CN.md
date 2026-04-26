@@ -110,14 +110,45 @@ Backfill subtitles** 计划任务，遍历整个库为缺字幕的影片提交�
 
 ### 触发字幕生成
 
-两种方式：
+两种方式：库级定时任务批量补全，或浏览器书签单条触发。
 
-1. **库级定时任务** —— 控制台 → 计划任务 → "InnerShelf: Backfill subtitles"
-   → 立即运行。遍历所有 InnerShelf 已识别的影片，跳过已经有
-   `.<lang>.srt` 的项目，对剩下的提交字幕生成任务。默认手动触发；
-   想定期跑就在控制台加个 cron 触发器。
+#### 库级补字幕任务
 
-2. **单条触发用书签** —— 把下面这段保存成浏览器书签：
+控制台 → **计划任务** → 在 InnerShelf 分类下找 "**InnerShelf: Backfill
+subtitles**" → 点 ▶ 运行。任务遍历所有 InnerShelf 已识别的影片，跳过
+每个目标语言都已经有 `<basename>.<lang>.srt` 同名字幕文件的项目，对
+剩下的每个缺失语言向 subtitle-forge 提交一个 job。
+
+> **关键 —— "完成"是什么意思**。subtitle-forge 是**异步接收 job** 的：
+> 每次 `POST /jobs` 立即返回 job id，subtitle-forge 之后在自己的队列里
+> 处理转录/翻译（每个影片几分钟到几小时不等，取决于 GPU 和片长）。
+> Jellyfin 任务在**所有 job 都已成功提交**时报 100%，**不是**所有字幕
+> 都生成完。实际 `.srt` 文件会随着 subtitle-forge 队列推进逐渐出现在
+> 文件系统里。
+
+**默认无 trigger** —— 只在你点 ▶ 时跑。要定期跑，在同一个 UI 里编辑
+任务的 Triggers（如每周日凌晨 3 点）。
+
+**第一次跑的推荐流程**：
+
+1. 验配置：插件 → InnerShelf → 点 Subtitle Forge 下面的 **Test connection**
+   ——必须能通
+2. 临时把 Subtitle Languages 改成单语言（如 `zh`）—— 第一次跑每个影片
+   最多只提交一个 job
+3. 在小库或闲时段跑 —— 500 部库可能在几分钟内提交 500+ job，之后
+   subtitle-forge 会跑几个小时
+4. 验证流程通了之后，再把 Subtitle Languages 改回真实需求重跑
+
+**确认提交情况** —— 控制台 → **日志** → 搜 `backfill: submitted job`
+能看到每个提交的 job 一行（含 job id、影片 itemId/路径、请求的语言列表）。
+任务结束后会有一行汇总 `backfill complete: N/M jobs submitted`。
+
+**查单个 job 进度** —— 没有原生 UI。用书签栏的 `GET /InnerShelf/Subtitles/Jobs/{jobId}`
+（管理员鉴权代理到 subtitle-forge），把日志里的 job id 替进去查。
+
+#### 单条触发用书签
+
+把下面这段保存成浏览器书签，在影片详情页点击触发：
 
 ```javascript
 javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('当前不是影片详情页');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('已提交：'+t):('失败 '+r.status+'：'+t));}).catch(e=>alert('网络错误：'+e));})();
@@ -125,6 +156,38 @@ javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){al
 
 打开任意影片详情页 → 点击书签 → 弹窗显示 job id 即提交成功。
 此接口要求管理员权限（`RequiresElevation`）。
+
+### 字幕文件落地与 Jellyfin 识别
+
+subtitle-forge 把生成的 `.srt` 文件写到**视频同目录**，命名为
+`<basename>.<lang>.srt`。配 `SubtitleLanguages = "zh,en"` 且开启
+KeepOriginal 的例子：
+
+```
+/media/jav/SSIS-001.mp4
+/media/jav/SSIS-001.zh.srt        ← 翻译为中文
+/media/jav/SSIS-001.en.srt        ← 翻译为英文
+/media/jav/SSIS-001.ja.srt        ← 原始日语（KeepOriginal 开了所以保留）
+```
+
+Jellyfin 按 basename 给视频配字幕，**多个影片在同一目录互不冲突**：
+
+```
+/media/jav/
+├── SSIS-001.mp4   ↔ SSIS-001.zh.srt
+├── SSIS-002.mp4   ↔ SSIS-002.zh.srt
+└── ABP-100.mp4    ↔ ABP-100.zh.srt
+```
+
+**让 Jellyfin 识别新字幕** —— sidecar 文件不是实时监控的：
+- 等下次定时库扫描（控制台 → 计划任务 → Scan Library），或
+- 手动跑 **Scan All Libraries**，或
+- 单条：影片右下角 ⋮ → Refresh metadata（任何选项都可以；文件扫描和 metadata 刷新模式无关）
+
+**存储要求** —— Jellyfin 和 subtitle-forge **必须看到同一份底层存储**。
+Path Mappings 只翻译路径**前缀**的差异，前后两个视图必须指向同一份
+文件。如果 subtitle-forge 写到 GPU 机器上 Jellyfin 看不到的本地存储，
+任务会显示成功但字幕永远不会出现在 Jellyfin 里。
 
 ### 接口
 
@@ -135,8 +198,6 @@ javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){al
 | `POST` | `/InnerShelf/Subtitles/Generate?itemId={guid}&languages=zh,en` | 提交任务，`languages` 可选，未传时使用插件配置 |
 | `GET`  | `/InnerShelf/Subtitles/Jobs/{jobId}` | 代理到 subtitle-forge 的 `GET /jobs/{id}`；走 Jellyfin 鉴权，无需把 subtitle-forge token 暴露给客户端 |
 | `GET`  | `/InnerShelf/Health` | 插件版本、各源开关 / 优先级、subtitle-forge 可达性（5s 探测）。配置页 Test Connection 按钮调它。 |
-
-生成的 `.srt` 文件直接写到视频同目录，Jellyfin 下次扫库或刷新元数据时自动识别。
 
 ## 从源码构建
 
