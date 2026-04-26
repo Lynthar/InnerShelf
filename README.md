@@ -111,8 +111,15 @@ no automatic background processing, no scheduled scans.
 
 ### Triggering generation
 
-There's no native per-item button in Jellyfin Web. Use a bookmarklet — save
-this as a browser bookmark:
+Two ways:
+
+1. **Library-wide scheduled task** — Dashboard → Scheduled Tasks → "InnerShelf:
+   Backfill subtitles" → Run now. Iterates every InnerShelf-managed movie,
+   skips items that already have a `.<lang>.srt` sidecar for each configured
+   target language, and submits jobs for the rest. Runs on demand by default;
+   add a cron trigger in the Dashboard if you want it to run periodically.
+
+2. **Per-item bookmarklet** for one-off generation — save this as a browser bookmark:
 
 ```javascript
 javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('Open a movie detail page first');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('Submitted: '+t):('Failed '+r.status+': '+t));}).catch(e=>alert('Network error: '+e));})();

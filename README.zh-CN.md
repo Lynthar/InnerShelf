@@ -109,7 +109,14 @@ InnerShelf 可以把视频文件交给运行在另一台 GPU 主机上的 [subti
 
 ### 触发字幕生成
 
-Jellyfin Web 没有原生的影片级按钮，使用书签代替 —— 把下面这段保存成浏览器书签：
+两种方式：
+
+1. **库级定时任务** —— 控制台 → 计划任务 → "InnerShelf: Backfill subtitles"
+   → 立即运行。遍历所有 InnerShelf 已识别的影片，跳过已经有
+   `.<lang>.srt` 的项目，对剩下的提交字幕生成任务。默认手动触发；
+   想定期跑就在控制台加个 cron 触发器。
+
+2. **单条触发用书签** —— 把下面这段保存成浏览器书签：
 
 ```javascript
 javascript:(()=>{const m=location.hash.match(/[?&]id=([a-f0-9]{32})/i);if(!m){alert('当前不是影片详情页');return;}fetch('/InnerShelf/Subtitles/Generate?itemId='+m[1],{method:'POST',headers:{'X-Emby-Token':ApiClient.accessToken()}}).then(async r=>{const t=await r.text();alert(r.ok?('已提交：'+t):('失败 '+r.status+'：'+t));}).catch(e=>alert('网络错误：'+e));})();

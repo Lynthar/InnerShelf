@@ -2,8 +2,10 @@ using System.Net;
 using Jellyfin.Plugin.InnerShelf.Sources;
 using Jellyfin.Plugin.InnerShelf.Sources.BuiltIn;
 using Jellyfin.Plugin.InnerShelf.Sources.MetaTube;
+using Jellyfin.Plugin.InnerShelf.Subtitles;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.InnerShelf;
@@ -45,7 +47,8 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IMetadataSource, JavBusSource>();
         serviceCollection.AddSingleton<IMetadataSource, MetaTubeSource>();
 
-        serviceCollection.AddSingleton<Subtitles.SubtitleForgeClient>();
+        serviceCollection.AddSingleton<SubtitleForgeClient>();
+        serviceCollection.AddSingleton<IScheduledTask, BackfillSubtitlesTask>();
     }
 
     /// <summary>
