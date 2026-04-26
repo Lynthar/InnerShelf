@@ -174,14 +174,17 @@ bad SDK bump 在 merge 前就被拦下。
 
 ### 发布
 
-在 `main` 上打 `vN.N.N.N` tag 会触发 `.github/workflows/release.yml`：
+在 `main` 上打 `vN.N.N` tag 会触发 `.github/workflows/release.yml`：
 build + test → 把 `Jellyfin.Plugin.InnerShelf.dll` + `AngleSharp.dll` +
-`meta.json` 打成 `innershelf_<version>.zip` → 挂到 GitHub release →
-向 `gh-pages` 分支的 `manifest.json` 追加新版本条目。
+`meta.json` 打成 `innershelf_<version>.0.zip` → 挂到 GitHub release →
+向 `gh-pages` 分支的 `manifest.json` 追加新版本条目。tag 是 3 段，
+内部补 `.0` 凑成 4 段（如 `v0.1.1` → manifest version `0.1.1.0`），
+因为 Jellyfin 用 `System.Version` 比较版本，缺第 4 段会被当 `-1` 处理，
+判大小会出错。
 
 **插件仓库 URL 一次性配置**：
 
-1. 打第一个 release tag（如 `v0.1.0.1`）—— 工作流首次运行时会自动创建
+1. 打第一个 release tag（如 `v0.1.1`）—— 工作流首次运行时会自动创建
    `gh-pages` 分支。
 2. 仓库 Settings → **Pages** → Source 选 `gh-pages` 分支 + 根目录 → 保存。
 3. 等约 1 分钟首次发布，访问

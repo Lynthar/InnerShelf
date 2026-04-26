@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to release (e.g. v0.2.0.0). Must already be pushed.'
+        description: 'Existing tag to release (e.g. v0.2.0). Must already be pushed.'
         required: true
 
 jobs:
@@ -37,14 +37,19 @@ jobs:
           REF_TAG: ${{ github.ref_name }}
         run: |
           TAG="${INPUT_TAG:-$REF_TAG}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Tag must be of form vN.N.N.N (got: '$TAG')"
+          # Tags are 3-part vN.N.N. Internally we pad to 4-part for meta.json and the
+          # manifest because Jellyfin parses these via System.Version, where a missing
+          # 4th component compares as -1 and breaks "is this version newer?" checks.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be of form vN.N.N (got: '$TAG')"
             exit 1
           fi
-          VERSION="${TAG#v}"
+          DISPLAY_VERSION="${TAG#v}"
+          VERSION="${DISPLAY_VERSION}.0"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Building $TAG (version=$VERSION)"
+          echo "displayVersion=$DISPLAY_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building $TAG (manifest version=$VERSION)"
 
       # meta.json's version is bumped here rather than expecting the dev to
       # pre-edit it before tagging — keeps the source-of-truth on the tag and

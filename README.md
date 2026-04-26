@@ -178,15 +178,18 @@ SDK bump fails before merge.
 
 ### Releases
 
-Tagging `vN.N.N.N` on `main` triggers `.github/workflows/release.yml`,
+Tagging `vN.N.N` on `main` triggers `.github/workflows/release.yml`,
 which builds + tests, packages `Jellyfin.Plugin.InnerShelf.dll` +
-`AngleSharp.dll` + `meta.json` into `innershelf_<version>.zip`, attaches
-the ZIP to a GitHub release, and appends the new version into
-`manifest.json` on the `gh-pages` branch.
+`AngleSharp.dll` + `meta.json` into `innershelf_<version>.0.zip`,
+attaches the ZIP to a GitHub release, and appends the new version into
+`manifest.json` on the `gh-pages` branch. The 3-part tag is padded to
+4-part internally (`v0.1.1` → manifest version `0.1.1.0`) because
+Jellyfin parses versions via `System.Version`, which mishandles the
+missing 4th component when comparing.
 
 **One-time setup for the plugin repository URL:**
 
-1. Cut your first release tag (e.g. `v0.1.0.1`) — the workflow auto-creates
+1. Cut your first release tag (e.g. `v0.1.1`) — the workflow auto-creates
    the `gh-pages` branch on the first run.
 2. Repo Settings → **Pages** → Source: `gh-pages` branch, root folder → Save.
 3. Wait ~1 minute for the first publish; verify
