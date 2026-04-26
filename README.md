@@ -22,9 +22,9 @@ A Jellyfin plugin for managing adult video libraries. Install it on a vanilla Je
 
 ### From Plugin Repository (Recommended)
 
-1. In Jellyfin Dashboard, go to **Administration → Plugins → Repositories**
-2. Add the InnerShelf plugin repository URL (coming soon)
-3. Install **InnerShelf** from the catalog
+1. In Jellyfin Dashboard, go to **Administration → Plugins → Repositories** → **+** to add
+2. Repository URL: `https://lynthar.github.io/InnerShelf/manifest.json`
+3. Save → **Catalog** tab → install **InnerShelf**
 4. Restart Jellyfin
 
 ### Manual Installation
@@ -175,6 +175,26 @@ on every push/PR; Dependabot (`.github/dependabot.yml`) opens a weekly PR
 when the Jellyfin SDK has a new version. `TreatWarningsAsErrors=true` in
 the csproj turns any deprecated-API warning into a CI failure, so a bad
 SDK bump fails before merge.
+
+### Releases
+
+Tagging `vN.N.N.N` on `main` triggers `.github/workflows/release.yml`,
+which builds + tests, packages `Jellyfin.Plugin.InnerShelf.dll` +
+`AngleSharp.dll` + `meta.json` into `innershelf_<version>.zip`, attaches
+the ZIP to a GitHub release, and appends the new version into
+`manifest.json` on the `gh-pages` branch.
+
+**One-time setup for the plugin repository URL:**
+
+1. Cut your first release tag (e.g. `v0.1.0.1`) — the workflow auto-creates
+   the `gh-pages` branch on the first run.
+2. Repo Settings → **Pages** → Source: `gh-pages` branch, root folder → Save.
+3. Wait ~1 minute for the first publish; verify
+   `https://lynthar.github.io/InnerShelf/manifest.json` returns the manifest.
+4. (Optional) Repo Settings → **Branches/Rules** — if a "require signed
+   commits" rule covers `gh-pages`, scope it to `refs/heads/main` only or
+   add the `github-actions[bot]` as a bypass actor; the workflow's commits
+   to `gh-pages` are unsigned.
 
 When Jellyfin releases a new version:
 

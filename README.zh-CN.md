@@ -22,9 +22,9 @@
 
 ### 从插件仓库安装（推荐）
 
-1. 在 Jellyfin 控制面板中，进入 **管理 → 插件 → 存储库**
-2. 添加 InnerShelf 插件仓库 URL（即将推出）
-3. 从目录中安装 **InnerShelf**
+1. 在 Jellyfin 控制面板进入 **管理 → 插件 → 存储库** → **+** 添加
+2. 仓库 URL：`https://lynthar.github.io/InnerShelf/manifest.json`
+3. 保存 → **目录** 标签页 → 安装 **InnerShelf**
 4. 重启 Jellyfin
 
 ### 手动安装
@@ -171,6 +171,25 @@ CI（`.github/workflows/build-test.yml`）会在每次 push/PR 时跑
 每周一扫一次 Jellyfin SDK 是否有新版，自动开 PR。csproj 里
 `TreatWarningsAsErrors=true`，任何 deprecated 警告会让 CI 直接失败，
 bad SDK bump 在 merge 前就被拦下。
+
+### 发布
+
+在 `main` 上打 `vN.N.N.N` tag 会触发 `.github/workflows/release.yml`：
+build + test → 把 `Jellyfin.Plugin.InnerShelf.dll` + `AngleSharp.dll` +
+`meta.json` 打成 `innershelf_<version>.zip` → 挂到 GitHub release →
+向 `gh-pages` 分支的 `manifest.json` 追加新版本条目。
+
+**插件仓库 URL 一次性配置**：
+
+1. 打第一个 release tag（如 `v0.1.0.1`）—— 工作流首次运行时会自动创建
+   `gh-pages` 分支。
+2. 仓库 Settings → **Pages** → Source 选 `gh-pages` 分支 + 根目录 → 保存。
+3. 等约 1 分钟首次发布，访问
+   `https://lynthar.github.io/InnerShelf/manifest.json` 验证 manifest 出来了。
+4. （可选）Settings → **Branches/Rules** —— 如果 "require signed commits"
+   规则覆盖到 `gh-pages`，把它范围限制到 `refs/heads/main`，或者把
+   `github-actions[bot]` 加成 bypass actor；工作流向 `gh-pages` 推的
+   commit 是未签名的。
 
 Jellyfin 出新版时：
 
