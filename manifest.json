@@ -6,7 +6,16 @@
     "overview": "Automatic metadata scraping for adult video libraries",
     "owner": "Lynthar",
     "category": "Metadata",
+    "imageUrl": "https://lynthar.github.io/InnerShelf/InnerShelf.png",
     "versions": [
+      {
+        "version": "0.1.2.0",
+        "changelog": "See https://github.com/Lynthar/InnerShelf/releases/tag/v0.1.2",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Lynthar/InnerShelf/releases/download/v0.1.2/innershelf_0.1.2.0.zip",
+        "checksum": "dde74efea76d8b4c38165dd5c7faeb99",
+        "timestamp": "2026-04-26T08:58:38Z"
+      },
       {
         "version": "0.1.1.0",
         "changelog": "See https://github.com/Lynthar/InnerShelf/releases/tag/v0.1.1",
@@ -15,7 +24,6 @@
         "checksum": "4d533b62d6886dac8157f17f09477c12",
         "timestamp": "2026-04-26T08:16:27Z"
       }
-    ],
-    "imageUrl": "https://lynthar.github.io/InnerShelf/InnerShelf.png"
+    ]
   }
 ]
