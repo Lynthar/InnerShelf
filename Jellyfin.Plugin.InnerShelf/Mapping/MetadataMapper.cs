@@ -100,6 +100,11 @@ public static class MetadataMapper
             {
                 tags.Add("Version: Revision");
             }
+
+            if (parsedCode.DiscNumber.HasValue)
+            {
+                tags.Add($"Disc: {parsedCode.DiscNumber.Value}");
+            }
         }
 
         movie.Tags = tags.ToArray();

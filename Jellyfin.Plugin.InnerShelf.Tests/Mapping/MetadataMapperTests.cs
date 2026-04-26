@@ -136,6 +136,38 @@ public class MetadataMapperTests
     }
 
     [Fact]
+    public void ToMovieResult_WithDiscNumber_AddsDiscTag()
+    {
+        var source = new MovieMetadata { Code = "SSIS-001", Title = "Test" };
+        var parsedCode = new ProductCode(
+            Raw: "SSIS-001-cd2",
+            Normalized: "SSIS-001",
+            Category: CodeCategory.Censored,
+            Versions: VersionFlags.None,
+            DiscNumber: 2);
+
+        var result = MetadataMapper.ToMovieResult(source, parsedCode);
+
+        Assert.Contains("Disc: 2", result.Item.Tags);
+    }
+
+    [Fact]
+    public void ToMovieResult_WithoutDiscNumber_NoDiscTag()
+    {
+        var source = new MovieMetadata { Code = "SSIS-001", Title = "Test" };
+        var parsedCode = new ProductCode(
+            Raw: "SSIS-001",
+            Normalized: "SSIS-001",
+            Category: CodeCategory.Censored,
+            Versions: VersionFlags.None,
+            DiscNumber: null);
+
+        var result = MetadataMapper.ToMovieResult(source, parsedCode);
+
+        Assert.DoesNotContain(result.Item.Tags, t => t.StartsWith("Disc:"));
+    }
+
+    [Fact]
     public void ToPersonResult_MapsFields()
     {
         var source = new ActorMetadata
