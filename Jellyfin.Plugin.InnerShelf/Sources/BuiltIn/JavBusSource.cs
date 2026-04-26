@@ -43,9 +43,18 @@ public class JavBusSource : IMetadataSource
             return [];
         }
 
-        return await JavBusParser
+        var results = await JavBusParser
             .ParseSearchResultsAsync(html, BaseUrl, Name, cancellationToken)
             .ConfigureAwait(false);
+
+        // Search returning 0 results is normal (unknown code, typo, very new releases),
+        // so this stays at Debug rather than Warning.
+        if (results.Count == 0)
+        {
+            _logger.LogDebug("JavBus search for '{Query}' returned 0 items", query);
+        }
+
+        return results;
     }
 
     /// <inheritdoc />
@@ -58,9 +67,23 @@ public class JavBusSource : IMetadataSource
             return null;
         }
 
-        return await JavBusParser
+        var movie = await JavBusParser
             .ParseMoviePageAsync(html, BaseUrl, sourceId, Name, cancellationToken)
             .ConfigureAwait(false);
+
+        // We fetched a real (non-CF, non-error) HTML body but the parser couldn't even
+        // find `.container`. Either the code 404'd into a soft "not found" page (rare —
+        // JavBus normally returns HTTP 404), or JavBus changed their DOM. Surface as
+        // Warning so silent breakage is visible in logs.
+        if (movie is null)
+        {
+            _logger.LogWarning(
+                "JavBus returned a page for '{Code}' but no .container element was found — possible DOM change. Body length: {Length}",
+                sourceId,
+                html.Length);
+        }
+
+        return movie;
     }
 
     /// <inheritdoc />
@@ -73,9 +96,17 @@ public class JavBusSource : IMetadataSource
             return null;
         }
 
-        return await JavBusParser
+        var actor = await JavBusParser
             .ParseActorSearchResultAsync(html, BaseUrl, name, cancellationToken)
             .ConfigureAwait(false);
+
+        // Actor not found is a normal outcome; debug only.
+        if (actor is null)
+        {
+            _logger.LogDebug("JavBus actor search for '{Name}' returned no results", name);
+        }
+
+        return actor;
     }
 
     private async Task<string?> FetchHtmlAsync(string url, CancellationToken cancellationToken)
@@ -95,11 +126,32 @@ public class JavBusSource : IMetadataSource
                 return null;
             }
 
-            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            // Cloudflare frequently serves a 200 OK with a challenge page body for
+            // requests it doesn't like. Without this check the scraper would parse
+            // the challenge page, find none of the expected JavBus selectors, and
+            // silently return empty results — looking exactly like "no match".
+            if (CloudflareDetector.IsCloudflareInterstitial(body))
+            {
+                _logger.LogWarning(
+                    "JavBus returned a Cloudflare interstitial for {Url} — request blocked. Configure HttpProxy in plugin settings to bypass.",
+                    url);
+                return null;
+            }
+
+            return body;
         }
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "Failed to fetch {Url}", url);
+            return null;
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient surfaces its own timeout as TaskCanceledException with the caller's CT
+            // not cancelled. Distinguish from genuine user cancellation, which we re-throw.
+            _logger.LogWarning(ex, "Timed out fetching {Url}", url);
             return null;
         }
     }

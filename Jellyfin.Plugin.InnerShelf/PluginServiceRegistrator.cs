@@ -30,16 +30,24 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// </summary>
     public const string SubtitleForgeHttpClientName = "InnerShelf.SubtitleForge";
 
+    // 30s ceiling for any single request to a configured upstream. The .NET
+    // default of 100s was long enough that a single wedged proxy or stalled
+    // remote could block library scans for minutes per item. 30s is generous
+    // (typical scrape/MetaTube/forge call is 1-3s) but tight enough to fail
+    // fast on real network trouble. Health.PingAsync uses its own 5s linked
+    // CTS, which fires first and is unaffected by this ceiling.
+    private static readonly TimeSpan HttpRequestTimeout = TimeSpan.FromSeconds(30);
+
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        serviceCollection.AddHttpClient(HttpClientName)
+        serviceCollection.AddHttpClient(HttpClientName, c => c.Timeout = HttpRequestTimeout)
             .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
 
-        serviceCollection.AddHttpClient(MetaTubeHttpClientName)
+        serviceCollection.AddHttpClient(MetaTubeHttpClientName, c => c.Timeout = HttpRequestTimeout)
             .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
 
-        serviceCollection.AddHttpClient(SubtitleForgeHttpClientName)
+        serviceCollection.AddHttpClient(SubtitleForgeHttpClientName, c => c.Timeout = HttpRequestTimeout)
             .ConfigurePrimaryHttpMessageHandler(CreatePrimaryHandler);
 
         serviceCollection.AddSingleton<Sources.MovieMetadataCache>();
