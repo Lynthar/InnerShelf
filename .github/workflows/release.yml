@@ -21,7 +21,7 @@ jobs:
       # Resolve at the tag's commit, not at HEAD of the default branch — important
       # for workflow_dispatch where github.ref is a branch ref, not the tag.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
