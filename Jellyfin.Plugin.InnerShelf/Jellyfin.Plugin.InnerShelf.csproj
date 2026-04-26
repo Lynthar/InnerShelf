@@ -8,6 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      Copy PackageReference runtime DLLs (e.g. AngleSharp) into bin/. Without this,
+      a class library only writes its own DLL and dependencies are resolved at runtime
+      from deps.json — but Jellyfin loads plugin folders as a flat directory and
+      cannot find AngleSharp. Jellyfin.Controller and Jellyfin.Model are still
+      excluded via ExcludeAssets=runtime below, so only AngleSharp ships.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
