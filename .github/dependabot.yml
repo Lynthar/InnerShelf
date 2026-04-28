@@ -1,26 +1,5 @@
-# Watches NuGet packages and opens PRs when updates are available.
-# CI on the PR (.github/workflows/build-test.yml) validates the bump
-# automatically. After merge, the manual upgrade checklist in
-# UPGRADING.md decides whether to also bump targetAbi and cut a release.
-
 version: 2
 updates:
-  - package-ecosystem: nuget
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    # Group Jellyfin SDK packages — Controller and Model always release
-    # in lockstep, so bumping them in one PR keeps history clean.
-    groups:
-      jellyfin-sdk:
-        patterns:
-          - "Jellyfin.*"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "deps"
-      include: scope
-
   - package-ecosystem: github-actions
     directory: /
     schedule:
