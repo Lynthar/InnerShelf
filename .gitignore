@@ -26,6 +26,27 @@ x86/
 bld/
 dist/
 
+## Node
+node_modules/
+.pnpm-store/
+.npm
+.eslintcache
+.stylelintcache
+.cache/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+## Vite
+dist-ssr/
+.vite/
+
+## Env
+.env
+.env.local
+.env.*.local
+
 ## OS
 .DS_Store
 Thumbs.db

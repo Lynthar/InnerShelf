@@ -1,0 +1,29 @@
+services:
+  stash:
+    image: stashapp/stash:v0.31.1
+    ports: ["9999:9999"]
+    environment:
+      - STASH_STASH=/data/
+      - STASH_GENERATED=/generated/
+      - STASH_METADATA=/metadata/
+      - STASH_CACHE=/cache/
+    volumes:
+      - ./stash-config:/root/.stash
+      # FIXME: replace the host side with the absolute path to your test media
+      # directory (e.g. D:/Media/test on Windows; quote if it contains spaces).
+      # The container always sees it at /data — that's what STASH_STASH points at.
+      - /path/to/your/test/media:/data
+      - ./stash-metadata:/metadata
+      - ./stash-cache:/cache
+      - ./stash-generated:/generated
+      - ./stash-blobs:/blobs
+    restart: unless-stopped
+
+  metatube:
+    image: ghcr.io/metatube-community/metatube-server:latest
+    ports: ["8080:8080"]
+    volumes:
+      - ./metatube-config:/config
+    environment:
+      - TOKEN=dev-token-change-me
+    restart: unless-stopped

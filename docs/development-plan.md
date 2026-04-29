@@ -163,26 +163,28 @@ InnerShelf 是基于 Stash 后端的自定义 React 前端 + HTTP 侧车（MetaT
 
 ### 3.1 前端
 
-| 层 | 选择 | 版本 | 备选 |
+| 层 | 选择 | 版本（实装） | 备选 |
 |--|--|--|--|
-| 框架 | **React** | 18.x | Vue 3 / Svelte（已论证 React 最优） |
-| 语言 | **TypeScript** | 5.x | — |
-| 构建 | **Vite** | 5+ | — |
-| 路由 | **TanStack Router** | latest | react-router 6 |
-| GraphQL 客户端 | **Apollo Client** | 3.x | urql |
+| 框架 | **React** | 19.x | Vue 3 / Svelte（已论证 React 最优） |
+| 语言 | **TypeScript** | 6.x | — |
+| 构建 | **Vite** | 8.x | — |
+| 路由 | **TanStack Router** | 1.x | react-router 6 |
+| GraphQL 客户端 | **Apollo Client** | 4.x | urql |
 | 类型生成 | **graphql-codegen** + `client-preset` | latest | — |
-| 样式 | **Tailwind v4** + **shadcn/ui** | — | Mantine（落选：定制性差） |
+| 样式 | **Tailwind v4** + **shadcn/ui** | 4.x | Mantine（落选：定制性差） |
 | 视频播放 | **Vidstack** | latest | video.js（落选：更老） |
-| 表单 | **react-hook-form** + **zod** | — | — |
-| 列表虚拟化 | **@tanstack/react-virtual** | — | — |
-| 轻量状态 | **Zustand** | — | jotai |
-| WebSocket 订阅 | **graphql-ws** + Apollo subscriptions link | — | — |
-| 包管理 | **pnpm** | 9+ | — |
-| Lint/Format | **Biome** | — | ESLint+Prettier |
-| 测试 | **Vitest** + **Testing Library** | — | — |
-| E2E | **Playwright** | — | — |
+| 表单 | **react-hook-form** + **zod** | 7.x / 4.x | — |
+| 列表虚拟化 | **@tanstack/react-virtual** | 3.x | — |
+| 轻量状态 | **Zustand** | 5.x | jotai |
+| WebSocket 订阅 | **graphql-ws** + Apollo subscriptions link | 6.x | — |
+| 包管理 | **pnpm** | 10.x | — |
+| Lint/Format | **Biome** | 2.x | ESLint+Prettier |
+| 测试 | **Vitest** + **Testing Library** | 4.x / 16.x | — |
+| E2E | **Playwright** | 待装 | — |
 
-> 注：Stash 自家 UI 也是 React + Vite + Apollo + pnpm（不过它锁在 React 17）。我们直接用 React 18，独立构建，跟 Stash UI 完全解耦。
+> 注：Stash 自家 UI 也是 React + Vite + Apollo + pnpm（锁 React 17 / Apollo 3 / Bootstrap 4）。我们用 React 19 + Apollo 4 独立构建，跟 Stash UI 完全解耦。
+>
+> 表里"版本（实装）"列是 2026-04-28 Phase 1 脚手架时 npm registry latest tag 解析的实际版本——比早期文档（v0.2/v0.3 草稿）写的略新。Apollo 4 拆分了 React 子路径：hooks 走 `@apollo/client/react`，`MockedProvider` 走 `@apollo/client/testing/react`。
 
 ### 3.1.1 前端策略：从零写，不 fork，双 UI 共存
 
@@ -259,33 +261,47 @@ InnerShelf 是基于 Stash 后端的自定义 React 前端 + HTTP 侧车（MetaT
 
 ### Phase 0：环境准备 + 仓库结构（1 周）
 
+本机环境（per-machine，未 commit）：
+
 - [ ] 装 Docker Desktop / Docker Engine + Compose
-- [ ] 跑起 Stash 容器（详见 §5.1），扫一个测试目录
-- [ ] 浏览 GraphQL Playground（`http://localhost:9999/playground`），翻一遍核心 query/mutation
-- [ ] 仓库结构调整：
-  - 新增 `web/`、`docker/`、`docs/`（已存在）
-  - `.gitignore` 加 Node 条目
-  - 给现有 `release.yml` / `build-test.yml` 加 `paths:` 过滤，避免改 `web/` 触发 .NET 构建
+- [ ] 编辑 `docker/dev/docker-compose.yml`，把 `/path/to/your/test/media` 替换为本机测试媒体目录的绝对路径（注释里有 `FIXME` 标记）
+- [ ] 跑起 Stash 容器（详见 §5.1），扫一个测试目录，在首次启动向导里设置 username/password 并生成 API Key
+- [ ] 浏览 GraphQL Playground（`http://localhost:9999/playground`），翻一遍核心 query/mutation（`Scene` / `Performer` / `Studio` / `Group` / `Tag`，以及 `findScenes` / `sceneUpdate`）
 - [ ] 装 Node ≥ 20 和 pnpm（`corepack enable && corepack prepare pnpm@latest --activate`）
+
+仓库结构（本仓库改动，已完成）：
+
+- [x] 新增 `web/`、`docker/`、`docs/` 目录（pivot commit `6851674`）
+- [x] `.gitignore` 加 Node / Vite / env 条目
+- [x] 移除旧 `.github/workflows/release.yml` 与 `build-test.yml`（pivot commit 一并删除——原计划"加 `paths:` 过滤避免 .NET 构建被触发"已不再适用，因为 .NET workflow 已不存在）
+- [x] `.github/dependabot.yml` 从 `nuget` 改为 `github-actions`（monthly）
+- [x] `docker/dev/.gitignore` 忽略 Stash / MetaTube 运行时挂载目录
 
 ### Phase 1：脚手架（1 周）
 
-- [ ] `cd web && pnpm create vite@latest . -- --template react-ts`
-- [ ] 装核心依赖：
+- [x] `web/` 脚手架（手写 Vite + React + TS 配置，跳过交互式 `pnpm create vite`）：`package.json` / `tsconfig.{json,app,node}` / `vite.config.ts` / `index.html` / `src/{main,App,apollo,index.css,App.test}.tsx,ts` / `src/queries/scenes.ts` / `vitest.setup.ts` / `.env.example` / `.gitignore`
+- [x] 装核心依赖（按当前 npm registry latest tag 解析，与 §3.1 表里写的版本号有偏差——pnpm 自动选了更新的主版本，决策详见 `DEVLOG.md`）：
   ```
-  pnpm add @apollo/client graphql graphql-ws
-  pnpm add -D @graphql-codegen/cli @graphql-codegen/client-preset
-  pnpm add -D tailwindcss@next @tailwindcss/vite
-  pnpm add @tanstack/react-router @tanstack/react-virtual
-  pnpm add @vidstack/react
-  pnpm add react-hook-form zod
-  pnpm add zustand
-  pnpm add -D @biomejs/biome
-  pnpm add -D vitest @testing-library/react
+  # runtime
+  pnpm add react react-dom @apollo/client graphql graphql-ws \
+           @tanstack/react-router @tanstack/react-virtual @vidstack/react \
+           react-hook-form zod zustand
+  # dev
+  pnpm add -D typescript vite @vitejs/plugin-react @types/react @types/react-dom \
+              @graphql-codegen/cli @graphql-codegen/client-preset \
+              tailwindcss @tailwindcss/vite @biomejs/biome \
+              vitest @vitest/ui @testing-library/react @testing-library/dom \
+              @testing-library/jest-dom jsdom
   ```
-- [ ] 配置 `codegen.ts`：`schema: { 'http://localhost:9999/graphql': { headers: { ApiKey: '...' } } }`
-- [ ] 第一个查询：`findScenes(filter: {}, filter_pagination: { per_page: 20 })`，前端能在 console 打印结果
-- [ ] CI: 加 `web-build.yml`（pnpm install / typecheck / build）
+- [x] 配置 `codegen.ts`：从 env 读 `VITE_STASH_URL` / `VITE_STASH_API_KEY`，输出到 `src/gql/`（gitignored，等捕获稳定 schema 后再 commit）
+- [ ] **本机验证**：跑通 `docker compose -f docker/dev/docker-compose.yml up -d` → Stash UI 生成 API Key → 填 `web/.env.local` → `pnpm codegen`（生成 `src/gql/`）→ `pnpm dev` → DevTools console 看到 `[Phase 1] findScenes returned N scenes` 打印。Stash 没起来时前端展示 "configure VITE_STASH_API_KEY" 提示，不会 crash。
+- [x] CI: 加 `.github/workflows/web-build.yml`（lint + typecheck + test + build；`paths: web/**` 过滤；pnpm 缓存）
+
+**Phase 1 偏差备忘**（在 §3.1 版本号之外）：
+- React **19**、Apollo Client **4**、Vite **8**、Vitest **4**、TypeScript **6** 实装；plan §3.1 写的是 React 18 / Apollo 3——文档保守，实际 ecosystem 已迁移。
+- Apollo 4 拆分了 import 子路径：`useQuery` / `ApolloProvider` 来自 `@apollo/client/react`，`MockedProvider` 来自 `@apollo/client/testing/react`。
+- `@vidstack/react` 0.6.x 还挂着 React 18 peer——Phase 2 接 player 时换更新的包。
+- 路由：TanStack Router 已装但暂未挂载（Phase 1 只有单页面）；Phase 2 会引入 file-based routing（`@tanstack/router-plugin/vite` + `src/routes/`）。
 
 ### Phase 2：MVP（4-6 周）
 
