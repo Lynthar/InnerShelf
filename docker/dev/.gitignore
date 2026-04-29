@@ -1,0 +1,9 @@
+# Stash runtime data (bind-mounted from docker-compose.yml — created on first run)
+stash-config/
+stash-metadata/
+stash-cache/
+stash-generated/
+stash-blobs/
+
+# MetaTube runtime data
+metatube-config/

@@ -1,0 +1,6 @@
+# graphql-codegen output — regenerate locally with `pnpm codegen` after Stash is running.
+# Will be committed once we capture a stable schema snapshot in a later phase.
+src/gql/
+
+# Test coverage output
+coverage/
