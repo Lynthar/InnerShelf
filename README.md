@@ -4,7 +4,7 @@ Self-hosted media management for adult / JAV content — a **custom React fronte
 
 [简体中文](README.zh-CN.md)
 
-> **Status: under development.** This repository is being bootstrapped from scratch as of 2026-04-28. Architecture, technical choices, and roadmap are documented in [`docs/development-plan.md`](docs/development-plan.md) — that document is the canonical reference until the codebase catches up.
+> **Status: under development.** This repository is being bootstrapped from scratch as of 2026-04-28.
 
 ## Looking for the Jellyfin plugin?
 
